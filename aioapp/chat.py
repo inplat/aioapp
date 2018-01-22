@@ -1,10 +1,10 @@
 from functools import partial
 import asyncio
 from abc import ABCMeta
-from typing import Type
+from typing import Type, Callable, Any
 from .app import Component
 from .error import PrepareError
-from aiotg import Bot, Chat
+from aiotg import Bot, Chat, Sender
 import aiozipkin.span as azs
 import aiozipkin.aiohttp_helpers as azah
 from .misc import json_encode
@@ -106,7 +106,8 @@ class Telegram(Component):
             if self._stopping and self._active_calls == 0:
                 self._stop_calls_fut.set_result(1)
 
-    def add_command(self, regexp, fn):
+    def add_command(self, regexp, fn: Callable[[azs.SpanAbc, 'TelegramChat',
+                                                Any], None]) -> None:
         """
         Manually register regexp based command
         """
@@ -183,6 +184,9 @@ class TelegramChat:
         self._chat = chat
         self._bot = bot
         self.id = chat.id
+        self.sender: Sender = chat.sender
+        self.message: dict = chat.message
+        self.type: str = chat.type
 
     async def send_text(self, context_span, text, **options):
         await self._bot.send_message(context_span, self.id, text,
