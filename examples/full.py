@@ -1,3 +1,5 @@
+import os
+import sys
 import logging
 import asyncio
 from aiohttp import web, web_request
@@ -27,11 +29,17 @@ class HttpHandler(http.Handler):
                 await asyncio.sleep(.1, loop=self.app.loop)
 
         await self.app.db.query_one(context_span,
-                                    'test_query', 'SELECT $1::int as a',
+                                    'postgres:test', 'SELECT $1::int as a',
                                     123)
         await self.app.tg.send_message(context_span,
                                        1825135, request.url)
-        return web.Response(text='Hello world!')
+
+        await self.app.redis.execute(context_span, 'redis:set',
+                                     'SET', 'key', 1)
+        res = await self.app.redis.execute(context_span, 'redis:set',
+                                           'GET', 'key')
+
+        return web.Response(text='Hello world! ' + res)
 
 
 class TelegramHandler(chat.TelegramHandler):
@@ -60,6 +68,12 @@ class TelegramHandler(chat.TelegramHandler):
 if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)
 
+    telegram_api_token = os.environ.get('TELEGRAM_API_TOKEN')
+    if not telegram_api_token:
+        print('Environment variable TELEGRAM_API_TOKEN not given')
+        print('TELEGRAM_API_TOKEN=<token> python -m examples.full')
+        exit(1)
+
     loop = asyncio.get_event_loop()
     app = Application(
         loop=loop
@@ -74,21 +88,33 @@ if __name__ == '__main__':
     )
     app.add(
         'db',
-        db.PgDb(
+        db.Postgres(
             'postgres://user:passwd@localhost:15432/db',
             pool_min_size=2,
             pool_max_size=19,
             pool_max_queries=50000,
             pool_max_inactive_connection_lifetime=300.,
             connect_max_attempts=10,
-            connect_retry_delay=1),
+            connect_retry_delay=1.0),
         stop_after=['http_server']
 
     )
+
+    app.add(
+        'redis',
+        db.Redis(
+            dsn='redis://localhost:6381/0?encoding=utf-8',
+            pool_min_size=2,
+            pool_max_size=4,
+            connect_max_attempts=10,
+            connect_retry_delay=1.0
+        )
+    )
+
     app.add(
         'tg',
         chat.Telegram(
-            api_token='**************************',
+            api_token=telegram_api_token,
             handler=TelegramHandler,
             connect_max_attempts=10,
             connect_retry_delay=1,

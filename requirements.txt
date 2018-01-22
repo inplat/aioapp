@@ -4,3 +4,4 @@ aiostatsd==1.0.0
 aiozipkin==0.0.1b8
 asyncpg==0.14.0
 aiotg==0.9.5
+aioredis==1.0.0

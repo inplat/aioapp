@@ -88,16 +88,19 @@ class Application(object):
             self.log_info("Shutting down tracer")
             await self._tracer.close()
 
-    def run(self):
+    def run(self) -> int:
         try:
             self.loop.run_until_complete(self.run_prepare())
         except PrepareError as e:
             self.log_err(e)
             return 1
+        except KeyboardInterrupt:
+            return 1
         self.run_loop()
         self.loop.run_until_complete(self.run_shutdown())
         print("Bye")
         self.loop.close()
+        return 0
 
     async def run_prepare(self):
         self.log_info('Prepare for start')

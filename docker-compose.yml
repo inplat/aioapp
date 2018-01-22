@@ -17,3 +17,7 @@ services:
       - POSTGRES_USER=user
       - POSTGRES_PASSWORD=passwd
       - POSTGRES_DB=db
+  redis:
+    image: redis
+    ports:
+      - "127.0.0.1:6381:6379"

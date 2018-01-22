@@ -3,18 +3,18 @@ import asyncio
 import asyncpg
 import asyncpg.pool
 import aiozipkin as az
-import aiozipkin.span as azs  # noqa
-from .app import Component
-from .error import PrepareError
-from .misc import mask_url_pwd
+import aiozipkin.span as azs
+from ..app import Component
+from ..error import PrepareError
+from ..misc import mask_url_pwd
 
 
-class PgDb(Component):
+class Postgres(Component):
     def __init__(self, dsn, pool_min_size=10, pool_max_size=10,
                  pool_max_queries=50000,
                  pool_max_inactive_connection_lifetime=300.0,
                  connect_max_attempts=10, connect_retry_delay=1.0) -> None:
-        super(PgDb, self).__init__()
+        super(Postgres, self).__init__()
         self.dsn = dsn
         self.pool_min_size = pool_min_size
         self.pool_max_size = pool_max_size
@@ -41,7 +41,7 @@ class PgDb(Component):
             max_queries=self.pool_max_queries,
             max_inactive_connection_lifetime=(
                 self.pool_max_inactive_connection_lifetime),
-            init=PgDb._conn_init,
+            init=Postgres._conn_init,
             loop=self.loop
         )
 
@@ -167,10 +167,7 @@ class TransactionContextManager:
 
 
 class Connection:
-    def __init__(self, db, conn):
-        """
-        :type db: PgDb
-        """
+    def __init__(self, db: Postgres, conn):
         self._db = db
         self._conn = conn
 
