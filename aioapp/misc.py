@@ -1,5 +1,6 @@
 import inspect
 import string
+from typing import Optional
 from random import SystemRandom
 import json
 import datetime
@@ -37,7 +38,7 @@ def async_call(loop, func, *args, delay=None, **kwargs):
         loop.call_soon(partial(_call, func, *args, **kwargs))
 
 
-def mask_url_pwd(route):
+def mask_url_pwd(route: Optional[str]) -> Optional[str]:
     if route is None:
         return None
     parsed = urlsplit(route)
