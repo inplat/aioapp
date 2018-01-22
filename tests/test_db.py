@@ -1,6 +1,6 @@
 from typing import Tuple
 from aioapp.app import Application
-from aioapp.db import PgDb
+from aioapp.db import Postgres
 from aioapp.error import PrepareError
 import aiozipkin.span as azs
 import pytest
@@ -8,10 +8,10 @@ import pytest
 
 async def _start_postgres(app: Application, postgres: Tuple[str, int],
                           connect_max_attempts=10,
-                          connect_retry_delay=1.0) -> PgDb:
+                          connect_retry_delay=1.0) -> Postgres:
     dsn = 'postgres://postgres@%s:%d/postgres' % (postgres[0], postgres[1])
-    db = PgDb(dsn, connect_max_attempts=connect_max_attempts,
-              connect_retry_delay=connect_retry_delay)
+    db = Postgres(dsn, connect_max_attempts=connect_max_attempts,
+                  connect_retry_delay=connect_retry_delay)
     app.add('db', db)
     await app.run_prepare()
     await db.start()
