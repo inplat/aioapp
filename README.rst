@@ -10,13 +10,16 @@ Micro framework based on asyncio
 .. image:: https://img.shields.io/travis/inplat/aioapp.svg
         :target: https://travis-ci.org/inplat/aioapp
 
+.. image:: https://codecov.io/gh/inplat/aioapp/branch/master/graph/badge.svg
+        :target: https://codecov.io/gh/inplat/aioapp
+
 .. image:: https://readthedocs.org/projects/aioapp/badge/?version=latest
         :target: https://aioapp.readthedocs.io/en/latest/?badge=latest
         :alt: Documentation Status
 
 .. image:: https://pyup.io/repos/github/inplat/aioapp/shield.svg
-     :target: https://pyup.io/repos/github/inplat/aioapp/
-     :alt: Updates
+        :target: https://pyup.io/repos/github/inplat/aioapp/
+        :alt: Updates
 
 
 * Free software: Apache License 2.0

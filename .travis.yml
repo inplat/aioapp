@@ -9,7 +9,9 @@ python:
   - 3.6
 
 install:
+  - pip install --upgrade setuptools
   - pip install Cython==0.27.3
+  - pip install codecov
   - pip install -r requirements_dev.txt
 
 script:
@@ -17,6 +19,9 @@ script:
   - bandit -r ./aioapp ./examples setup.py
   - mypy aioapp examples setup.py --ignore-missing-imports
   - pytest -v
+
+after_success:
+  codecov
 
 deploy:
   provider: pypi
