@@ -11,6 +11,7 @@ import aioamqp.channel
 import aioamqp.protocol
 import aiohttp.web
 import asyncpg
+import aioredis
 from docker.client import DockerClient
 from docker.utils import kwargs_from_env
 from async_generator import yield_, async_generator
@@ -47,37 +48,19 @@ def get_free_port():
         sock.close()
 
 
-@pytest.fixture(scope='session')
-async def postgres(loop):
-    tag = 'latest'
-    image = 'postgres'
-
+async def _docker_run(image, tag, image_port, check_fn):
     host = '127.0.0.1'
-    timeout = 60
-
     unused_tcp_port = get_free_port()
 
     client = DockerClient(version='auto', **kwargs_from_env())
+    print('Pulling image %s:%s' % (image, tag))
     client.images.pull(image, tag=tag)
     print('Stating %s:%s on %s:%s' % (image, tag, host, unused_tcp_port))
     cont = client.containers.run('%s:%s' % (image, tag), detach=True,
-                                 ports={'5432/tcp': ('0.0.0.0',
-                                                     unused_tcp_port)})
+                                 ports={'%s/tcp' % image_port: (
+                                     '0.0.0.0', unused_tcp_port)})
     try:
-        start_time = time.time()
-        conn = None
-        while conn is None:
-            if start_time + timeout < time.time():
-                raise Exception("Initialization timeout, failed to "
-                                "initialize postgresql container")
-            try:
-                conn = await asyncpg.connect(
-                    'postgresql://postgres@%s:%s/postgres'
-                    '' % (host, unused_tcp_port),
-                    loop=loop)
-            except Exception as e:
-                time.sleep(.1)
-        await conn.close()
+        await check_fn(host, unused_tcp_port)
         yield (host, unused_tcp_port)
     finally:
         cont.kill()
@@ -85,24 +68,58 @@ async def postgres(loop):
 
 
 @pytest.fixture(scope='session')
-async def rabbit(loop, rabbit_override_addr):
-    if rabbit_override_addr:
-        yield rabbit_override_addr.split(':')
-        return
-    tag = '3.7.1'
-    image = 'rabbitmq:{}'.format(tag)
-
-    host = '0.0.0.0'
+async def postgres(loop):
     timeout = 60
 
-    unused_tcp_port = get_free_port()
+    async def check_fn(host, port):
 
-    client = DockerClient(version='auto', **kwargs_from_env())
-    print('Stating rabbitmq %s on %s:%s' % (image, host, unused_tcp_port))
-    cont = client.containers.run(image, detach=True,
-                                 ports={'5672/tcp': ('0.0.0.0',
-                                                     unused_tcp_port)})
-    try:
+        start_time = time.time()
+        conn = None
+        while conn is None:
+            if start_time + timeout < time.time():
+                raise Exception("Initialization timeout, failed to "
+                                "initialize postgres container")
+            try:
+                conn = await asyncpg.connect(
+                    'postgresql://postgres@%s:%s/postgres'
+                    '' % (host, port),
+                    loop=loop)
+            except Exception as e:
+                time.sleep(.1)
+        await conn.close()
+
+    async for cred in _docker_run('postgres', 'latest', 5432, check_fn):
+        yield cred
+
+
+@pytest.fixture(scope='session')
+async def redis(loop):
+    timeout = 60
+
+    async def check_fn(host, port):
+        start_time = time.time()
+        conn = None
+        while conn is None:
+            if start_time + timeout < time.time():
+                raise Exception("Initialization timeout, failed to "
+                                "initialize redis container")
+            try:
+                dsn = 'redis://%s:%s/0' % (host, port)
+                conn = await aioredis.create_connection(dsn, loop=loop)
+            except Exception as e:
+                time.sleep(.1)
+        conn.close()
+        await conn.wait_closed()
+
+    async for cred in _docker_run('redis', 'latest', 6379, check_fn):
+        yield cred
+
+
+@pytest.fixture(scope='session')
+async def rabbit(loop):
+    timeout = 60
+
+    async def check_fn(host, port):
         start_time = time.time()
         conn = transport = None
         while conn is None:
@@ -110,17 +127,14 @@ async def rabbit(loop, rabbit_override_addr):
                 raise Exception("Initialization timeout, failed t   o "
                                 "initialize rabbitmq container")
             try:
-                transport, conn = await aioamqp.connect(host, unused_tcp_port,
-                                                        loop=loop)
+                transport, conn = await aioamqp.connect(host, port, loop=loop)
             except Exception:
                 time.sleep(.1)
         await conn.close()
         transport.close()
 
-        yield (host, unused_tcp_port)
-    finally:
-        cont.kill()
-        cont.remove()
+    async for cred in _docker_run('rabbitmq', 'latest', 5672, check_fn):
+        yield cred
 
 
 @pytest.fixture
