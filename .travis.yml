@@ -18,7 +18,7 @@ script:
   - flake8 aioapp examples tests setup.py
   - bandit -r ./aioapp ./examples setup.py
   - mypy aioapp examples setup.py --ignore-missing-imports
-  - pytest -v
+  - py.test -v --cov-report term --cov-report html --cov aioapp ./tests
 
 after_success:
   codecov
