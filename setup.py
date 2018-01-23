@@ -38,7 +38,7 @@ setup(
     long_description=readme + '\n\n' + history,
     author="Konstantin Stepanov",
     url='https://github.com/inplat/aioapp',
-    packages=find_packages(include=['aioapp']),
+    packages=find_packages(),
     include_package_data=True,
     install_requires=list(filter(lambda a: a, requirements.split('\n'))),
     license="Apache License 2.0",
