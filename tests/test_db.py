@@ -138,7 +138,6 @@ async def test_redis(app, redis):
             assert [[b'unsubscribe', b'test_channel', 0]] == res
 
 
-
 async def test_redis_prepare_failure(app, unused_tcp_port):
     with pytest.raises(PrepareError):
         await _start_redis(app, ('127.0.0.1', unused_tcp_port),

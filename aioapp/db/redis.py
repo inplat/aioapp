@@ -46,7 +46,8 @@ class Redis(Component):
             self.pool.close()
             await self.pool.wait_closed()
 
-    def connection(self, context_span: azs.SpanAbc) -> 'ConnectionContextManager':
+    def connection(self,
+                   context_span: azs.SpanAbc) -> 'ConnectionContextManager':
         return ConnectionContextManager(self, context_span)
 
     async def execute(self, context_span: azs.SpanAbc, id: str,
