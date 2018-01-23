@@ -60,7 +60,7 @@ async def test_pgdb(app, postgres):
     assert len(res) == 0
 
     async with db.connection(span) as conn:
-        async with conn.xact(span, isolation_level='READ COMMITTED'):
+        async with conn.xact(span):
             await conn.execute(span, 'test', 'CREATE TABLE test(id int);')
             await conn.execute(span, 'test',
                                'INSERT INTO test(id) VALUES(1)')
@@ -71,7 +71,7 @@ async def test_pgdb(app, postgres):
 
     try:
         async with db.connection(span) as conn:
-            async with conn.xact(span, isolation_level='READ COMMITTED'):
+            async with conn.xact(span, isolation_level='SERIALIZABLE'):
                 await conn.execute(span, 'test',
                                    'INSERT INTO test(id) VALUES(2)')
                 raise UserWarning()
