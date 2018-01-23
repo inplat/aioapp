@@ -21,6 +21,9 @@ Micro framework based on asyncio
         :target: https://pyup.io/repos/github/inplat/aioapp/
         :alt: Updates
 
+.. image:: https://landscape.io/github/inplat/aioapp/master/landscape.svg?style=flat
+        :target: https://landscape.io/github/inplat/aioapp/master
+        :alt: Code Health
 
 * Free software: Apache License 2.0
 * Documentation: https://aioapp.readthedocs.io.
