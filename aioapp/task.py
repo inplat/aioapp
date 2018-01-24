@@ -197,7 +197,7 @@ class TaskManager(Component):
         :type properties: Properties
         """
         context_span: azs.SpanAbc = self.app.tracer.new_trace(sampled=True,
-                                                               debug=False)
+                                                              debug=False)
 
         context_span.name('amqp:message')
         context_span.kind(azh.SERVER)

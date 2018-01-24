@@ -9,7 +9,7 @@ from urllib.parse import urlparse
 from aiohttp import web, ClientSession, hdrs
 from aiohttp import ClientResponse
 from aiohttp.payload import BytesPayload
-from aiohttp import client_exceptions, TCPConnector
+from aiohttp import TCPConnector
 from .app import Component
 import logging
 import aiozipkin as az
@@ -280,16 +280,16 @@ class Client(Component):
                                   span_params, response_codec, **kwargs)
 
     async def post(self, context_span: azs.SpanAbc,
-                  url: str,
-                  data: Any = None,
-                  headers: Optional[dict] = None,
-                  read_timeout: Optional[float] = None,
-                  conn_timeout: Optional[float] = None,
-                  ssl_ctx: Optional[ssl.SSLContext] = None,
-                  span_params: Optional[dict] = None,
-                  response_codec: Optional[ResponseCodec] = None,
-                  **kwargs
-                  ) -> ClientResponse:
+                   url: str,
+                   data: Any = None,
+                   headers: Optional[dict] = None,
+                   read_timeout: Optional[float] = None,
+                   conn_timeout: Optional[float] = None,
+                   ssl_ctx: Optional[ssl.SSLContext] = None,
+                   span_params: Optional[dict] = None,
+                   response_codec: Optional[ResponseCodec] = None,
+                   **kwargs
+                   ) -> ClientResponse:
         return await self.request(context_span, hdrs.METH_POST, url, data,
                                   headers, read_timeout, conn_timeout, ssl_ctx,
                                   span_params, response_codec, **kwargs)

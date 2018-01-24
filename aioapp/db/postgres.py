@@ -98,9 +98,11 @@ class Postgres(Component):
         if self.pool:
             await self.pool.close()
 
-    def connection(self, context_span: azs.SpanAbc
+    def connection(self, context_span: azs.SpanAbc,
+                   acquire_timeout=None
                    ) -> 'ConnectionContextManager':
-        return ConnectionContextManager(self, context_span)
+        return ConnectionContextManager(self, context_span,
+                                        acquire_timeout=acquire_timeout)
 
     async def query_one(self, context_span: azs.SpanAbc, id: str, query: str,
                         *args: Any, timeout: float = None
@@ -124,10 +126,12 @@ class Postgres(Component):
 
 
 class ConnectionContextManager:
-    def __init__(self, db: Postgres, context_span: azs.SpanAbc) -> None:
+    def __init__(self, db: Postgres, context_span: azs.SpanAbc,
+                 acquire_timeout: float = None) -> None:
         self._db = db
         self._conn = None
         self._context_span = context_span
+        self._acquire_timeout = acquire_timeout
 
     async def __aenter__(self) -> 'Connection':
         span = None
@@ -140,7 +144,8 @@ class ConnectionContextManager:
                 span.kind(az.CLIENT)
                 span.name("db:Acquire")
                 span.remote_endpoint("postgres")
-            self._conn = await self._db._pool.acquire()
+            self._conn = await self._db._pool.acquire(
+                timeout=self._acquire_timeout)
         except Exception as e:
             if span:
                 span.finish(exception=e)

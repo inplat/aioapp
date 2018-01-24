@@ -42,7 +42,8 @@ async def test_server(app, unused_tcp_port):
     server = Server(
         host='127.0.0.1',
         port=unused_tcp_port,
-        handler=TestHandler
+        handler=TestHandler,
+        access_log_format='%(asctime)-15s %(clientip)s %(user)-8s %(message)s'
     )
     client = Client()
     app.add('server', server)
@@ -60,7 +61,11 @@ async def test_server(app, unused_tcp_port):
                                 'http://127.0.0.1:%d/fb' % unused_tcp_port)
     assert resp.status == 403
 
-    resp = await app.client.get(span,
+    span2 = None
+    if app.tracer:
+        span2 = app.tracer.new_trace(sampled=True, debug=False)
+
+    resp = await app.client.get(span2,
                                 'http://127.0.0.1:%d/ok' % unused_tcp_port)
     assert resp.status == 200
     assert await resp.text() == app.my_param
