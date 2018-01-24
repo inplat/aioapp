@@ -1,11 +1,12 @@
 from abc import ABCMeta
 import io
-from typing import Type, Any
+import ssl
+from typing import Type, Any, Optional
 from functools import partial
 import asyncio
 import traceback
 from urllib.parse import urlparse
-from aiohttp import web, ClientSession
+from aiohttp import web, ClientSession, hdrs
 from aiohttp import ClientResponse
 from aiohttp.payload import BytesPayload
 from aiohttp import client_exceptions, TCPConnector
@@ -15,7 +16,6 @@ import aiozipkin as az
 import aiozipkin.aiohttp_helpers as azah
 import aiozipkin.span as azs
 import aiozipkin.constants as azc
-
 
 access_logger = logging.getLogger('aiohttp.access')
 SPAN_KEY = 'zipkin_span'
@@ -33,14 +33,12 @@ class Handler(object):
 
 
 class ResponseCodec:
-
     async def decode(self, context_span: azs.SpanAbc,
                      response: ClientResponse) -> Any:
         raise NotImplementedError()
 
 
 class Server(Component):
-
     def __init__(self, host: str, port: int, handler: Type[Handler],
                  access_log_format=None, access_log=access_logger,
                  shutdown_timeout=60.0) -> None:
@@ -64,15 +62,15 @@ class Server(Component):
 
     async def wrap_middleware(self, app, handler):
         async def middleware_handler(request: web.Request):
-            if self.app._tracer:
+            if self.app.tracer:
                 context = az.make_context(request.headers)
                 if context is None:
                     sampled = azah.parse_sampled(request.headers)
                     debug = azah.parse_debug(request.headers)
-                    span = self.app._tracer.new_trace(sampled=sampled,
-                                                      debug=debug)
+                    span = self.app.tracer.new_trace(sampled=sampled,
+                                                     debug=debug)
                 else:
-                    span = self.app._tracer.join_span(context)
+                    span = self.app.tracer.join_span(context)
                 request[SPAN_KEY] = span
 
                 if span.is_noop:
@@ -163,7 +161,7 @@ class Server(Component):
         self.servers = await asyncio.gather(*self.server_creations,
                                             loop=self.loop)
         self.app.log_info('HTTP server ready to handle connections on %s'
-                          '' % (', '.join(self.uris), ))
+                          '' % (', '.join(self.uris),))
 
     async def stop(self):
         self.app.log_info("Stopping http server")
@@ -189,60 +187,112 @@ class Client(Component):
     async def stop(self):
         pass
 
-    async def post(self, context_span: azs.SpanAbc, span_params,
-                   response_codec, url,
-                   data=None, headers=None,
-                   read_timeout=None, conn_timeout=None, ssl_ctx=None):
-        """
-        :type context_span: azs.SpanAbc
-        :type span_params: dict
-        :type response_codec: AbstractResponseCodec
-        :type url: str
-        :type data: bytes
-        :type headers: dict
-        :type read_timeout: float
-        :type conn_timeout: float
-        :type ssl_ctx: ssl.SSLContext
-        :rtype: Awaitable[ClientResponse]
-        """
-        conn = TCPConnector(ssl_context=ssl_ctx)
-        # TODO проверить доступные хосты для передачи трассировочных заголовков
+    async def request(self,
+                      context_span: Optional[azs.SpanAbc],
+                      method: str,
+                      url: str,
+                      data: Any = None,
+                      headers: Optional[dict] = None,
+                      read_timeout: Optional[float] = None,
+                      conn_timeout: Optional[float] = None,
+                      ssl_ctx: Optional[ssl.SSLContext] = None,
+                      span_params: Optional[dict] = None,
+                      response_codec: Optional[ResponseCodec] = None,
+                      **kwargs
+                      ) -> ClientResponse:
+        conn = TCPConnector(ssl_context=ssl_ctx, loop=self.loop)
         headers = headers or {}
-        headers.update(context_span.context.make_headers())
-        with context_span.tracer.new_child(context_span.context) as span:
+        # TODO optional propagate tracing headers
+        span = None
+        if context_span:
+            headers.update(context_span.context.make_headers())
+            span = context_span.tracer.new_child(context_span.context)
+            span.start()
+        try:
             async with ClientSession(loop=self.loop,
                                      headers=headers,
                                      read_timeout=read_timeout,
                                      conn_timeout=conn_timeout,
                                      connector=conn) as session:
-                if 'name' in span_params:
-                    span.name(span_params['name'])
-                if 'endpoint_name' in span_params:
-                    span.remote_endpoint(span_params['endpoint_name'])
-                if 'tags' in span_params:
-                    for tag_name, tag_val in span_params['tags'].items():
-                        span.tag(tag_name, tag_val)
-
-                span.kind(az.CLIENT)
-                span.tag(azah.HTTP_METHOD, "POST")
                 parsed = urlparse(url)
-                span.tag(azc.HTTP_HOST, parsed.netloc)
-                span.tag(azc.HTTP_PATH, parsed.path)
-                span.tag(azc.HTTP_REQUEST_SIZE, str(len(data)))
-                span.tag(azc.HTTP_URL, url)
-                _annotate_bytes(span, data)
-                try:
-                    async with session.post(url, data=data) as resp:
-                        response_body = await resp.read()
-                        _annotate_bytes(span, response_body)
-                        span.tag(azc.HTTP_STATUS_CODE, resp.status)
-                        span.tag(azc.HTTP_RESPONSE_SIZE,
-                                 str(len(response_body)))
-                        dec = await response_codec.decode(span, resp)
-                        return dec
-                except client_exceptions.ClientError as e:
-                    span.tag("error.message", str(e))
-                    raise
+
+                if span:
+                    if span_params and 'name' in span_params:
+                        span.name(span_params['name'])
+                    else:
+                        span.name('client {0} {1}'.format('POST', parsed.path))
+                    if span_params and 'endpoint_name' in span_params:
+                        span.remote_endpoint(span_params['endpoint_name'])
+                    else:
+                        span.remote_endpoint(parsed.netloc)
+                    if span_params and 'tags' in span_params:
+                        for tag_name, tag_val in span_params['tags'].items():
+                            span.tag(tag_name, tag_val)
+                    span.kind(az.CLIENT)
+                    span.tag(azah.HTTP_METHOD, "POST")
+                    span.tag(azc.HTTP_HOST, parsed.netloc)
+                    span.tag(azc.HTTP_PATH, parsed.path)
+                    if data:
+                        span.tag(azc.HTTP_REQUEST_SIZE, str(len(data)))
+                    else:
+                        span.tag(azc.HTTP_REQUEST_SIZE, 0)
+                    span.tag(azc.HTTP_URL, url)
+                    if (span_params and 'annotate_request' in span_params and
+                            span_params['annotate_request']):
+                        _annotate_bytes(span, data)
+
+                resp = await session._request(method, url, data=data,
+                                              **kwargs)
+                response_body = await resp.read()
+                resp.release()
+                if span:
+                    if (span_params and 'annotate_response' in span_params and
+                            span_params['annotate_request']):
+                        _annotate_bytes(span, data)
+                    span.tag(azc.HTTP_STATUS_CODE, resp.status)
+                    span.tag(azc.HTTP_RESPONSE_SIZE,
+                             str(len(response_body)))
+                if response_codec:
+                    dec = await response_codec.decode(span, resp)
+                    return dec
+                else:
+                    return resp
+        except Exception as e:
+            if span:
+                span.finish(exception=e)
+            raise
+        finally:
+            if span:
+                span.finish()
+
+    async def get(self, context_span: azs.SpanAbc,
+                  url: str,
+                  headers: Optional[dict] = None,
+                  read_timeout: Optional[float] = None,
+                  conn_timeout: Optional[float] = None,
+                  ssl_ctx: Optional[ssl.SSLContext] = None,
+                  span_params: Optional[dict] = None,
+                  response_codec: Optional[ResponseCodec] = None,
+                  **kwargs
+                  ) -> ClientResponse:
+        return await self.request(context_span, hdrs.METH_GET, url, None,
+                                  headers, read_timeout, conn_timeout, ssl_ctx,
+                                  span_params, response_codec, **kwargs)
+
+    async def post(self, context_span: azs.SpanAbc,
+                  url: str,
+                  data: Any = None,
+                  headers: Optional[dict] = None,
+                  read_timeout: Optional[float] = None,
+                  conn_timeout: Optional[float] = None,
+                  ssl_ctx: Optional[ssl.SSLContext] = None,
+                  span_params: Optional[dict] = None,
+                  response_codec: Optional[ResponseCodec] = None,
+                  **kwargs
+                  ) -> ClientResponse:
+        return await self.request(context_span, hdrs.METH_POST, url, data,
+                                  headers, read_timeout, conn_timeout, ssl_ctx,
+                                  span_params, response_codec, **kwargs)
 
 
 def _annotate_bytes(span, data):

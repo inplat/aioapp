@@ -130,12 +130,24 @@ class ConnectionContextManager:
         self._context_span = context_span
 
     async def __aenter__(self) -> 'Connection':
-        with self._context_span.tracer.new_child(
-                self._context_span.context) as span:
-            span.kind(az.CLIENT)
-            span.name("db:Acquire")
-            span.remote_endpoint("postgres")
+        span = None
+        if self._context_span:
+            span = self._context_span.tracer.new_child(
+                self._context_span.context)
+            span.start()
+        try:
+            if span:
+                span.kind(az.CLIENT)
+                span.name("db:Acquire")
+                span.remote_endpoint("postgres")
             self._conn = await self._db._pool.acquire()
+        except Exception as e:
+            if span:
+                span.finish(exception=e)
+            raise
+        finally:
+            if span:
+                span.finish()
         c = Connection(self._db, self._conn)
         return c
 
@@ -186,32 +198,68 @@ class Connection:
 
     async def execute(self, context_span: azs.SpanAbc, id: str,
                       query: str, *args: Any, timeout: float = None) -> str:
-        with context_span.tracer.new_child(context_span.context) as span:
-            span.kind(az.CLIENT)
-            span.name("db:%s" % id)
-            span.remote_endpoint("postgres")
-            span.annotate(repr(args))
+        span = None
+        if context_span:
+            span = context_span.tracer.new_child(context_span.context)
+            span.start()
+        try:
+            if span:
+                span.kind(az.CLIENT)
+                span.name("db:%s" % id)
+                span.remote_endpoint("postgres")
+                span.annotate(repr(args))
             res = await self._conn.execute(query, *args, timeout=timeout)
+        except Exception as e:
+            if span:
+                span.finish(exception=e)
+            raise
+        finally:
+            if span:
+                span.finish()
         return res
 
     async def query_one(self, context_span: azs.SpanAbc, id: str,
                         query: str, *args: Any,
                         timeout: float = None) -> asyncpg.protocol.Record:
-        with context_span.tracer.new_child(context_span.context) as span:
-            span.kind(az.CLIENT)
-            span.name("db:%s" % id)
-            span.remote_endpoint("postgres")
-            span.annotate(repr(args))
+        span = None
+        if context_span:
+            span = context_span.tracer.new_child(context_span.context)
+            span.start()
+        try:
+            if span:
+                span.kind(az.CLIENT)
+                span.name("db:%s" % id)
+                span.remote_endpoint("postgres")
+                span.annotate(repr(args))
             res = await self._conn.fetchrow(query, *args, timeout=timeout)
+        except Exception as e:
+            if span:
+                span.finish(exception=e)
+            raise
+        finally:
+            if span:
+                span.finish()
         return res
 
     async def query_all(self, context_span: azs.SpanAbc, id: str,
                         query: str, *args: Any, timeout: float = None
                         ) -> List[asyncpg.protocol.Record]:
-        with context_span.tracer.new_child(context_span.context) as span:
-            span.kind(az.CLIENT)
-            span.name("db:%s" % id)
-            span.remote_endpoint("postgres")
-            span.annotate(repr(args))
+        span = None
+        if context_span:
+            span = context_span.tracer.new_child(context_span.context)
+            span.start()
+        try:
+            if span:
+                span.kind(az.CLIENT)
+                span.name("db:%s" % id)
+                span.remote_endpoint("postgres")
+                span.annotate(repr(args))
             res = await self._conn.fetch(query, *args, timeout=timeout)
+        except Exception as e:
+            if span:
+                span.finish(exception=e)
+            raise
+        finally:
+            if span:
+                span.finish()
         return res

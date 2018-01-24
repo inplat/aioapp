@@ -137,8 +137,8 @@ class Telegram(Component):
         async def wrap(func, chat, match):
             self._active_msgs += 1
             try:
-                span = self.app._tracer.new_trace(sampled=True,
-                                                  debug=False)
+                span = self.app.tracer.new_trace(sampled=True,
+                                                 debug=False)
                 with span:
                     span.name('telegram:in')
                     span.kind(azah.SERVER)

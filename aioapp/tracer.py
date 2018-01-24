@@ -92,10 +92,6 @@ class TracerTransport(azt.Transport):
                         azc.HTTP_STATUS_CODE: 'status',
                         azc.HTTP_METHOD: 'method',
                         azc.HTTP_HOST: 'host',
-                        'api.key': 'api_key',
-                        'api.method': 'api_method',
-                        'api.code': 'api_code',
-                        'api_merc.code': 'api_merc_code',
                     }
                     for tag_key, tag_name in copy_tags.items():
                         if tag_key in t:

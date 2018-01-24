@@ -171,14 +171,15 @@ def tracer_server(loop):
     loop.run_until_complete(finalize())
 
 
-@pytest.fixture
-async def app(tracer_server, loop):
-    tracer_host = '127.0.0.1'
-    tracer_port = (await tracer_server()).port
-    tracer_addr = 'http://%s:%s/' % (tracer_host, tracer_port)
-
+@pytest.fixture(params=["with_tracer", "without_tracer"])
+async def app(request, tracer_server, loop):
     app = Application(loop=loop)
-    app.setup_logging(tracer_driver='zipkin', tracer_addr=tracer_addr,
-                      tracer_name='test')
+
+    if request.param == 'with_tracer':
+        tracer_host = '127.0.0.1'
+        tracer_port = (await tracer_server()).port
+        tracer_addr = 'http://%s:%s/' % (tracer_host, tracer_port)
+        app.setup_logging(tracer_driver='zipkin', tracer_addr=tracer_addr,
+                          tracer_name='test')
     yield app
     await app.run_shutdown()

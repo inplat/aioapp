@@ -5,6 +5,8 @@ from aioapp.error import PrepareError
 from async_timeout import timeout
 import aiozipkin.span as azs
 import pytest
+import string
+from aioapp.misc import rndstr
 
 
 async def _start_postgres(app: Application, addr: Tuple[str, int],
@@ -32,10 +34,12 @@ async def _start_redis(app: Application, addr: Tuple[str, int],
 
 
 def _create_span(app) -> azs.SpanAbc:
-    return app._tracer.new_trace(sampled=False, debug=False)
+    if app.tracer:
+        return app.tracer.new_trace(sampled=False, debug=False)
 
 
 async def test_postgres(app, postgres):
+    table_name = 'tbl_' + rndstr(20, string.ascii_lowercase + string.digits)
     db = await _start_postgres(app, postgres)
     span = _create_span(app)
 
@@ -74,25 +78,28 @@ async def test_postgres(app, postgres):
 
     async with db.connection(span) as conn:
         async with conn.xact(span):
-            await conn.execute(span, 'test', 'CREATE TABLE test(id int);')
             await conn.execute(span, 'test',
-                               'INSERT INTO test(id) VALUES(1)')
+                               'CREATE TABLE %s(id int);' % table_name)
+            await conn.execute(span, 'test',
+                               'INSERT INTO %s(id) VALUES(1)' % table_name)
 
     res = await db.query_one(span, 'test',
-                             'SELECT COUNT(*) FROM test', timeout=10)
+                             'SELECT COUNT(*) FROM %s' % table_name,
+                             timeout=10)
     assert res[0] == 1
 
     try:
         async with db.connection(span) as conn:
             async with conn.xact(span, isolation_level='SERIALIZABLE'):
                 await conn.execute(span, 'test',
-                                   'INSERT INTO test(id) VALUES(2)')
+                                   'INSERT INTO %s(id) VALUES(2)' % table_name)
                 raise UserWarning()
     except UserWarning:
         pass
 
     res = await db.query_one(span, 'test',
-                             'SELECT COUNT(*) FROM test', timeout=10)
+                             'SELECT COUNT(*) FROM %s' % table_name,
+                             timeout=10)
     assert res[0] == 1
 
 

@@ -37,7 +37,7 @@ class Application(object):
         self._components: Dict[str, Component] = {}
         self._stop_deps: dict = {}
         self._stopped: list = []
-        self._tracer: Tracer = None
+        self.tracer: Tracer = None
 
     def add(self, name: str, comp: Component,
             stop_after: list = None):
@@ -81,12 +81,12 @@ class Application(object):
                                     metrics_driver, metrics_addr, metrics_name,
                                     send_inteval=tracer_send_inteval,
                                     loop=self.loop)
-        self._tracer = Tracer(transport, sampler, endpoint)
+        self.tracer = Tracer(transport, sampler, endpoint)
 
     async def _shutdown_tracer(self):
-        if self._tracer:
+        if self.tracer:
             self.log_info("Shutting down tracer")
-            await self._tracer.close()
+            await self.tracer.close()
 
     def run(self) -> int:
         try:

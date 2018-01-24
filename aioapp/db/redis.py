@@ -63,14 +63,26 @@ class ConnectionContextManager:
         self._context_span = context_span
 
     async def __aenter__(self) -> 'Connection':
-        with self._context_span.tracer.new_child(
-                self._context_span.context) as span:
-            span.kind(az.CLIENT)
-            span.name("redis:Acquire")
-            span.remote_endpoint("redis")
-            span.tag('redis.size_before', self._redis.pool.size)
-            span.tag('redis.free_before', self._redis.pool.freesize)
+        span = None
+        if self._context_span:
+            span = self._context_span.tracer.new_child(
+                self._context_span.context)
+            span.start()
+        try:
+            if span:
+                span.kind(az.CLIENT)
+                span.name("redis:Acquire")
+                span.remote_endpoint("redis")
+                span.tag('redis.size_before', self._redis.pool.size)
+                span.tag('redis.free_before', self._redis.pool.freesize)
             self._conn = await self._redis.pool.acquire()
+        except Exception as e:
+            if span:
+                span.finish(exception=e)
+            raise
+        finally:
+            if span:
+                span.finish()
         c = Connection(self._redis, self._conn)
         return c
 
@@ -93,23 +105,47 @@ class Connection:
 
     async def execute(self, context_span: azs.SpanAbc, id: str,
                       command: str, *args):
-        with context_span.tracer.new_child(context_span.context) as span:
-            span.kind(az.CLIENT)
-            span.name("redis:%s" % id)
-            span.remote_endpoint("redis")
-            span.tag("redis.command", command)
-            span.annotate(repr(args))
+        span = None
+        if context_span:
+            span = context_span.tracer.new_child(context_span.context)
+            span.start()
+        try:
+            if span:
+                span.kind(az.CLIENT)
+                span.name("redis:%s" % id)
+                span.remote_endpoint("redis")
+                span.tag("redis.command", command)
+                span.annotate(repr(args))
             res = await self._conn.execute(command, *args)
+        except Exception as e:
+            if span:
+                span.finish(exception=e)
+            raise
+        finally:
+            if span:
+                span.finish()
         return res
 
     async def execute_pubsub(self, context_span: azs.SpanAbc, id: str,
                              command, *channels_or_patterns):
-        with context_span.tracer.new_child(context_span.context) as span:
-            span.kind(az.CLIENT)
-            span.name("redis:%s" % id)
-            span.remote_endpoint("redis")
-            span.tag("redis.pubsub", command)
-            span.annotate(repr(channels_or_patterns))
+        span = None
+        if context_span:
+            span = context_span.tracer.new_child(context_span.context)
+            span.start()
+        try:
+            if span:
+                span.kind(az.CLIENT)
+                span.name("redis:%s" % id)
+                span.remote_endpoint("redis")
+                span.tag("redis.pubsub", command)
+                span.annotate(repr(channels_or_patterns))
             res = await self._conn.execute_pubsub(command,
                                                   *channels_or_patterns)
+        except Exception as e:
+            if span:
+                span.finish(exception=e)
+            raise
+        finally:
+            if span:
+                span.finish()
         return res
