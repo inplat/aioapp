@@ -23,17 +23,17 @@ class TelegramHandler(object):
 
 class Telegram(Component):
     def __init__(self, api_token: str, handler: Type[TelegramHandler],
-                 connect_max_attempts: int,
-                 connect_retry_delay: float,
-                 api_timeout: int = 60) -> None:
+                 connect_max_attempts: int = 10,
+                 connect_retry_delay: float = 1.0,
+                 api_timeout: int = 60, bot_class=Bot) -> None:
         super(Telegram, self).__init__()
         self.tg_id: int = None
         self.tg_first_name: str = None
         self.tg_username: str = None
         self.api_token: str = api_token
-        self.bot: Bot = Bot(self.api_token,
-                            api_timeout=api_timeout,
-                            json_serialize=json_encode)
+        self.bot: Bot = bot_class(self.api_token,
+                                  api_timeout=api_timeout,
+                                  json_serialize=json_encode)
         self.handler = handler(self)
         self._connect_max_attempts: int = connect_max_attempts
         self._connect_retry_delay: float = connect_retry_delay
@@ -74,7 +74,8 @@ class Telegram(Component):
         self.app.log_info("Stopping telegram bot")
         self._stopping = True
         self.bot.stop()
-        self._run_fut.cancel()
+        if self._run_fut:
+            self._run_fut.cancel()
         # await self.handler.stop()
 
         if self._active_msgs > 0:
@@ -92,15 +93,26 @@ class Telegram(Component):
     async def api_call(self, context_span: azs.SpanAbc, method, **params):
         self._active_calls += 1
         try:
-            # TODO if tracer is None
-            with context_span.tracer.new_child(context_span.context) as span:
-                span.name('telegram:%s' % method)
-                span.kind(azah.CLIENT)
-                span.tag('telegram.method', method)
-                if 'chat_id' in params:
-                    span.tag('telegram:chat_id', params.get('chat_id'))
-                span.annotate(json_encode(params))
+            span = None
+            if context_span:
+                span = context_span.tracer.new_child(context_span.context)
+                span.start()
+            try:
+                if span:
+                    span.name('telegram:%s' % method)
+                    span.kind(azah.CLIENT)
+                    span.tag('telegram.method', method)
+                    if 'chat_id' in params:
+                        span.tag('telegram:chat_id', params.get('chat_id'))
+                    span.annotate(json_encode(params))
                 await self.bot.api_call(method, **params)
+            except Exception as e:
+                if span:
+                    span.finish(exception=e)
+                raise
+            finally:
+                if span:
+                    span.finish()
         finally:
             self._active_calls -= 1
             if self._stopping and self._active_calls == 0:
@@ -137,38 +149,60 @@ class Telegram(Component):
         async def wrap(func, chat, match):
             self._active_msgs += 1
             try:
-                span = self.app.tracer.new_trace(sampled=True,
-                                                 debug=False)
-                with span:
-                    span.name('telegram:in')
-                    span.kind(azah.SERVER)
-                    span.tag('telegram:date',
-                             chat.message.get('date'))
-                    span.tag('telegram:message_id',
-                             chat.message.get('message_id'))
-                    span.tag('telegram:from_username',
-                             chat.message.get('from', {}).get('username'))
-                    span.tag('telegram:from_last_name',
-                             chat.message.get('from', {}).get('last_name'))
-                    span.tag('telegram:from_first_name',
-                             chat.message.get('from', {}).get('first_name'))
-                    span.tag('telegram:from_id',
-                             chat.message.get('from', {}).get('id'))
-                    span.tag('telegram:from_is_bot',
-                             chat.message.get('from', {}).get('is_bot'))
-                    span.tag('telegram:from_language_code',
-                             chat.message.get('from', {}).get('language_code'))
-                    span.tag('telegram:chat_username',
-                             chat.message.get('chat', {}).get('username'))
-                    span.tag('telegram:chat_last_name',
-                             chat.message.get('chat', {}).get('last_name'))
-                    span.tag('telegram:chat_first_name',
-                             chat.message.get('chat', {}).get('first_name'))
-                    span.tag('telegram:chat_id',
-                             chat.message.get('chat', {}).get('id'))
-                    span.tag('telegram:chat_type',
-                             chat.message.get('chat', {}).get('private'))
+                span = None
+                if self.app.tracer:
+                    span = self.app.tracer.new_trace(sampled=True,
+                                                     debug=False)
+                    span.start()
+                try:
+                    if span:
+                        span.name('telegram:in')
+                        span.kind(azah.SERVER)
+                        span.tag('telegram:date',
+                                 chat.message.get('date'))
+                        span.tag('telegram:message_id',
+                                 chat.message.get('message_id'))
+                        span.tag('telegram:from_username',
+                                 chat.message.get('from',
+                                                  {}).get('username'))
+                        span.tag('telegram:from_last_name',
+                                 chat.message.get('from',
+                                                  {}).get('last_name'))
+                        span.tag('telegram:from_first_name',
+                                 chat.message.get('from',
+                                                  {}).get('first_name'))
+                        span.tag('telegram:from_id',
+                                 chat.message.get('from',
+                                                  {}).get('id'))
+                        span.tag('telegram:from_is_bot',
+                                 chat.message.get('from',
+                                                  {}).get('is_bot'))
+                        span.tag('telegram:from_language_code',
+                                 chat.message.get('from',
+                                                  {}).get('language_code'))
+                        span.tag('telegram:chat_username',
+                                 chat.message.get('chat',
+                                                  {}).get('username'))
+                        span.tag('telegram:chat_last_name',
+                                 chat.message.get('chat',
+                                                  {}).get('last_name'))
+                        span.tag('telegram:chat_first_name',
+                                 chat.message.get('chat',
+                                                  {}).get('first_name'))
+                        span.tag('telegram:chat_id',
+                                 chat.message.get('chat',
+                                                  {}).get('id'))
+                        span.tag('telegram:chat_type',
+                                 chat.message.get('chat',
+                                                  {}).get('private'))
                     await func(span, TelegramChat(chat, self), match)
+                except Exception as e:
+                    if span:
+                        span.finish(exception=e)
+                    raise
+                finally:
+                    if span:
+                        span.finish()
             finally:
                 self._active_msgs -= 1
                 if self._stopping and self._active_msgs == 0:
