@@ -104,8 +104,8 @@ async def redis(loop):
                 raise Exception("Initialization timeout, failed to "
                                 "initialize redis container")
             try:
-                dsn = 'redis://%s:%s/0' % (host, port)
-                conn = await aioredis.create_connection(dsn, loop=loop)
+                url = 'redis://%s:%s/0' % (host, port)
+                conn = await aioredis.create_connection(url, loop=loop)
             except Exception as e:
                 time.sleep(.1)
         conn.close()

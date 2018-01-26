@@ -14,13 +14,13 @@ JsonType = Union[None, int, float, str, bool, List[Any], Dict[str, Any]]
 
 
 class Postgres(Component):
-    def __init__(self, dsn: str, pool_min_size: int=10, pool_max_size: int=10,
+    def __init__(self, url: str, pool_min_size: int=10, pool_max_size: int=10,
                  pool_max_queries: int=50000,
                  pool_max_inactive_connection_lifetime: float=300.0,
                  connect_max_attempts: int=10,
                  connect_retry_delay: float=1.0) -> None:
         super(Postgres, self).__init__()
-        self.dsn = dsn
+        self.url = url
         self.pool_min_size = pool_min_size
         self.pool_max_size = pool_max_size
         self.pool_max_queries = pool_max_queries
@@ -35,12 +35,12 @@ class Postgres(Component):
         return self._pool
 
     @property
-    def _masked_dsn(self) -> str:
-        return mask_url_pwd(self.dsn)
+    def _masked_url(self) -> str:
+        return mask_url_pwd(self.url)
 
     async def _connect(self) -> None:
         self._pool: asyncpg.pool.Pool = await asyncpg.create_pool(
-            dsn=self.dsn,
+            dsn=self.url,
             max_size=self.pool_max_size,
             min_size=self.pool_min_size,
             max_queries=self.pool_max_queries,
@@ -79,22 +79,22 @@ class Postgres(Component):
         )
 
     async def prepare(self) -> None:
-        self.app.log_info("Connecting to %s" % self._masked_dsn)
+        self.app.log_info("Connecting to %s" % self._masked_url)
         for i in range(self.connect_max_attempts):
             try:
                 await self._connect()
-                self.app.log_info("Connected to %s" % self._masked_dsn)
+                self.app.log_info("Connected to %s" % self._masked_url)
                 return
             except Exception as e:
                 self.app.log_err(str(e))
                 await asyncio.sleep(self.connect_retry_delay)
-        raise PrepareError("Could not connect to %s" % self._masked_dsn)
+        raise PrepareError("Could not connect to %s" % self._masked_url)
 
     async def start(self) -> None:
         pass
 
     async def stop(self) -> None:
-        self.app.log_info("Disconnecting from %s" % self._masked_dsn)
+        self.app.log_info("Disconnecting from %s" % self._masked_url)
         if self.pool:
             await self.pool.close()
 

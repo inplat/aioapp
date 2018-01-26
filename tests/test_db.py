@@ -12,8 +12,8 @@ from aioapp.misc import rndstr
 async def _start_postgres(app: Application, addr: Tuple[str, int],
                           connect_max_attempts=10,
                           connect_retry_delay=1.0) -> Postgres:
-    dsn = 'postgres://postgres@%s:%d/postgres' % (addr[0], addr[1])
-    db = Postgres(dsn, connect_max_attempts=connect_max_attempts,
+    url = 'postgres://postgres@%s:%d/postgres' % (addr[0], addr[1])
+    db = Postgres(url, connect_max_attempts=connect_max_attempts,
                   connect_retry_delay=connect_retry_delay)
     app.add('db', db)
     await app.run_prepare()
@@ -24,8 +24,8 @@ async def _start_postgres(app: Application, addr: Tuple[str, int],
 async def _start_redis(app: Application, addr: Tuple[str, int],
                        connect_max_attempts=10,
                        connect_retry_delay=1.0) -> Redis:
-    dsn = 'redis://%s:%d/0?encoding=utf-8' % (addr[0], addr[1])
-    db = Redis(dsn, connect_max_attempts=connect_max_attempts,
+    url = 'redis://%s:%d/0?encoding=utf-8' % (addr[0], addr[1])
+    db = Redis(url, connect_max_attempts=connect_max_attempts,
                connect_retry_delay=connect_retry_delay)
     app.add('redis', db)
     await app.run_prepare()

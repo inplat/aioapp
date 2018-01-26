@@ -7,12 +7,12 @@ from ..error import PrepareError
 
 
 class Redis(Component):
-    def __init__(self, dsn: str, pool_min_size: int = 1,
+    def __init__(self, url: str, pool_min_size: int = 1,
                  pool_max_size: int = 10,
                  connect_max_attempts: int = 10,
                  connect_retry_delay: float = 1.0) -> None:
         super(Redis, self).__init__()
-        self.dsn = dsn
+        self.url = url
         self.pool_min_size = pool_min_size
         self.pool_max_size = pool_max_size
         self.connect_max_attempts = connect_max_attempts
@@ -20,19 +20,19 @@ class Redis(Component):
         self.pool = None
 
     async def prepare(self):
-        self.app.log_info("Connecting to %s" % self.dsn)
+        self.app.log_info("Connecting to %s" % self.url)
         for i in range(self.connect_max_attempts):
             try:
                 await self._connect()
-                self.app.log_info("Connected to %s" % self.dsn)
+                self.app.log_info("Connected to %s" % self.url)
                 return
             except Exception as e:
                 self.app.log_err(str(e))
                 await asyncio.sleep(self.connect_retry_delay)
-        raise PrepareError("Could not connect to %s" % self.dsn)
+        raise PrepareError("Could not connect to %s" % self.url)
 
     async def _connect(self):
-        self.pool = await aioredis.create_pool(self.dsn,
+        self.pool = await aioredis.create_pool(self.url,
                                                minsize=self.pool_min_size,
                                                maxsize=self.pool_max_size,
                                                loop=self.loop)
@@ -42,7 +42,7 @@ class Redis(Component):
 
     async def stop(self):
         if self.pool:
-            self.app.log_info("Disconnecting from %s" % self.dsn)
+            self.app.log_info("Disconnecting from %s" % self.url)
             self.pool.close()
             await self.pool.wait_closed()
 

@@ -88,7 +88,7 @@ if __name__ == '__main__':
     app.add(
         'db',
         db.Postgres(
-            'postgres://user:passwd@localhost:15432/db',
+            url='postgres://user:passwd@localhost:15432/db',
             pool_min_size=2,
             pool_max_size=19,
             pool_max_queries=50000,
@@ -102,7 +102,7 @@ if __name__ == '__main__':
     app.add(
         'redis',
         db.Redis(
-            dsn='redis://localhost:6381/0?encoding=utf-8',
+            url='redis://localhost:6381/0?encoding=utf-8',
             pool_min_size=2,
             pool_max_size=4,
             connect_max_attempts=10,
