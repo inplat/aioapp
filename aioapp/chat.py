@@ -146,6 +146,9 @@ class Telegram(Component):
         self.bot.add_inline(regexp, self._graceful_fn(fn))
 
     def _graceful_fn(self, func):
+        if not asyncio.iscoroutinefunction(func):
+            raise UserWarning('handler must be coroutine function')
+
         async def wrap(func, chat, match):
             self._active_msgs += 1
             try:

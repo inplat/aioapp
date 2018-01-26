@@ -130,10 +130,14 @@ class Server(Component):
             return resp, trace
 
     def add_route(self, method, uri, handler):
+        if not asyncio.iscoroutinefunction(handler):
+            raise UserWarning('handler must be coroutine function')
         self.web_app.router.add_route(method, uri,
                                       partial(self._handle_request, handler))
 
     def set_error_handler(self, handler):
+        if not asyncio.iscoroutinefunction(handler):
+            raise UserWarning('handler must be coroutine function')
         self.error_handler = handler
 
     async def _handle_request(self, handler, request):
