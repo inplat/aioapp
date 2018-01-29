@@ -21,3 +21,7 @@ services:
     image: redis
     ports:
       - "127.0.0.1:6381:6379"
+  rabbit:
+    image: rabbitmq
+    ports:
+      - "127.0.0.1:56721:5672"

@@ -20,11 +20,9 @@ class Redis(Component):
         self.pool = None
 
     async def prepare(self):
-        self.app.log_info("Connecting to %s" % self.url)
         for i in range(self.connect_max_attempts):
             try:
                 await self._connect()
-                self.app.log_info("Connected to %s" % self.url)
                 return
             except Exception as e:
                 self.app.log_err(str(e))
@@ -32,10 +30,12 @@ class Redis(Component):
         raise PrepareError("Could not connect to %s" % self.url)
 
     async def _connect(self):
+        self.app.log_info("Connecting to %s" % self.url)
         self.pool = await aioredis.create_pool(self.url,
                                                minsize=self.pool_min_size,
                                                maxsize=self.pool_max_size,
                                                loop=self.loop)
+        self.app.log_info("Connected to %s" % self.url)
 
     async def start(self):
         pass

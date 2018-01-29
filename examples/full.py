@@ -3,7 +3,7 @@ import logging
 import asyncio
 from aiohttp import web, web_request
 from aioapp.app import Application
-from aioapp import http, db, chat
+from aioapp import http, db, chat, amqp
 
 
 class HttpHandler(http.Handler):
@@ -117,6 +117,13 @@ if __name__ == '__main__':
             handler=TelegramHandler,
             connect_max_attempts=10,
             connect_retry_delay=1,
+        )
+    )
+
+    app.add(
+        'amqp',
+        amqp.Amqp(
+            url='amqp://guest:guest@localhost:56721/',
         )
     )
 

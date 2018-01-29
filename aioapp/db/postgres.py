@@ -39,6 +39,7 @@ class Postgres(Component):
         return mask_url_pwd(self.url)
 
     async def _connect(self) -> None:
+        self.app.log_info("Connecting to %s" % self._masked_url)
         self._pool: asyncpg.pool.Pool = await asyncpg.create_pool(
             dsn=self.url,
             max_size=self.pool_max_size,
@@ -49,6 +50,7 @@ class Postgres(Component):
             init=Postgres._conn_init,
             loop=self.loop
         )
+        self.app.log_info("Connected to %s" % self._masked_url)
 
     @staticmethod
     async def _conn_init(conn: asyncpg.pool.PoolConnectionProxy) -> None:
@@ -79,11 +81,9 @@ class Postgres(Component):
         )
 
     async def prepare(self) -> None:
-        self.app.log_info("Connecting to %s" % self._masked_url)
         for i in range(self.connect_max_attempts):
             try:
                 await self._connect()
-                self.app.log_info("Connected to %s" % self._masked_url)
                 return
             except Exception as e:
                 self.app.log_err(str(e))
@@ -94,8 +94,8 @@ class Postgres(Component):
         pass
 
     async def stop(self) -> None:
-        self.app.log_info("Disconnecting from %s" % self._masked_url)
         if self.pool:
+            self.app.log_info("Disconnecting from %s" % self._masked_url)
             await self.pool.close()
 
     def connection(self, context_span: azs.SpanAbc,

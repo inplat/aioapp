@@ -45,12 +45,10 @@ class Telegram(Component):
         self._stop_msgs_fut: asyncio.Future = None
 
     async def prepare(self) -> None:
-        self.app.log_info("Connecting to telegram")
-        # await self.handler.init()
-
         attempt = 0
         while True:
             try:
+                self.app.log_info("Connecting to telegram")
                 me = await self.bot.get_me()
                 break
             except Exception as e:

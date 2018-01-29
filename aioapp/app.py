@@ -20,13 +20,13 @@ class Component(object):
         self.loop: asyncio.AbstractEventLoop = None
         self.app: 'Application' = None
 
-    async def prepare(self):
+    async def prepare(self) -> None:
         raise NotImplementedError()
 
-    async def start(self):
+    async def start(self) -> None:
         raise NotImplementedError()
 
-    async def stop(self):
+    async def stop(self) -> None:
         raise NotImplementedError()
 
 
