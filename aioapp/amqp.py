@@ -106,4 +106,3 @@ class Amqp(Component):
 
     async def _stop_consumers(self):
         self._consuming = False
-
