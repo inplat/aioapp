@@ -105,15 +105,17 @@ class Server(Component):
             resp = await handler(request)
             return resp, None
         except Exception as herr:
+            trace = traceback.format_exc()
+
             if span is not None:
                 span.tag('error', 'true')
                 span.tag('error.message', str(herr))
+                span.annotate(trace)
 
-            trace = None
             if self.error_handler:
                 try:
                     resp = await self.error_handler(span, request, herr)
-                    trace = traceback.format_exc()
+
                 except Exception as eerr:
                     if isinstance(eerr, web.HTTPException):
                         resp = eerr
@@ -121,6 +123,8 @@ class Server(Component):
                         self.app.log_err(eerr)
                         resp = web.Response(status=500, text='')
                     trace = traceback.format_exc()
+                    if span:
+                        span.annotate(trace)
             else:
                 if isinstance(herr, web.HTTPException):
                     resp = herr
@@ -261,9 +265,10 @@ class Client(Component):
                     return dec
                 else:
                     return resp
-        except Exception as e:
+        except Exception as err:
             if span:
-                span.finish(exception=e)
+                span.finish(exception=err)
+                span.tag('error.message', str(err))
             raise
         finally:
             if span:

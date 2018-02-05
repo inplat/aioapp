@@ -1,4 +1,5 @@
 import asyncio
+import traceback
 import aioredis
 import aiozipkin as az
 import aiozipkin.span as azs
@@ -76,9 +77,11 @@ class ConnectionContextManager:
                 span.tag('redis.size_before', self._redis.pool.size)
                 span.tag('redis.free_before', self._redis.pool.freesize)
             self._conn = await self._redis.pool.acquire()
-        except Exception as e:
+        except Exception as err:
             if span:
-                span.finish(exception=e)
+                span.tag('error.message', str(err))
+                span.annotate(traceback.format_exc())
+                span.finish(exception=err)
             raise
         finally:
             if span:
@@ -117,9 +120,11 @@ class Connection:
                 span.tag("redis.command", command)
                 span.annotate(repr(args))
             res = await self._conn.execute(command, *args)
-        except Exception as e:
+        except Exception as err:
             if span:
-                span.finish(exception=e)
+                span.tag('error.message', str(err))
+                span.annotate(traceback.format_exc())
+                span.finish(exception=err)
             raise
         finally:
             if span:
@@ -141,9 +146,11 @@ class Connection:
                 span.annotate(repr(channels_or_patterns))
             res = await self._conn.execute_pubsub(command,
                                                   *channels_or_patterns)
-        except Exception as e:
+        except Exception as err:
             if span:
-                span.finish(exception=e)
+                span.tag('error.message', str(err))
+                span.annotate(traceback.format_exc())
+                span.finish(exception=err)
             raise
         finally:
             if span:

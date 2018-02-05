@@ -1,3 +1,4 @@
+import traceback
 from functools import partial
 import asyncio
 from abc import ABCMeta
@@ -104,9 +105,11 @@ class Telegram(Component):
                         span.tag('telegram:chat_id', params.get('chat_id'))
                     span.annotate(json_encode(params))
                 await self.bot.api_call(method, **params)
-            except Exception as e:
+            except Exception as err:
                 if span:
-                    span.finish(exception=e)
+                    span.tag('error.message', str(err))
+                    span.annotate(traceback.format_exc())
+                    span.finish(exception=err)
                 raise
             finally:
                 if span:
@@ -197,9 +200,11 @@ class Telegram(Component):
                                  chat.message.get('chat',
                                                   {}).get('private'))
                     await func(span, TelegramChat(chat, self), match)
-                except Exception as e:
+                except Exception as err:
                     if span:
-                        span.finish(exception=e)
+                        span.tag('error.message', str(err))
+                        span.annotate(traceback.format_exc())
+                        span.finish(exception=err)
                     raise
                 finally:
                     if span:

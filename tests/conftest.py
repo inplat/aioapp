@@ -25,6 +25,44 @@ aioamqp.channel.logger.level = logging.CRITICAL
 aioamqp.protocol.logger.level = logging.CRITICAL
 
 
+def pytest_addoption(parser):
+    parser.addoption("--tracer-addr", dest="tracer_addr",
+                     help="Use this tracer instead of emulator if specified",
+                     metavar="host:port")
+    parser.addoption("--postgres-addr", dest="postgres_addr",
+                     help="Use this postgres instead of docker image "
+                          "if specified",
+                     metavar="host:port")
+    parser.addoption("--redis-addr", dest="redis_addr",
+                     help="Use this redis instead of docker image "
+                          "if specified",
+                     metavar="host:port")
+    parser.addoption("--rabbit-addr", dest="rabbit_addr",
+                     help="Use this rabbitmq instead of docker image "
+                          "if specified",
+                     metavar="host:port")
+
+
+@pytest.fixture(scope='session')
+def tracer_override_addr(request):
+    return request.config.getoption('tracer_addr')
+
+
+@pytest.fixture(scope='session')
+def postgres_override_addr(request):
+    return request.config.getoption('postgres_addr')
+
+
+@pytest.fixture(scope='session')
+def redis_override_addr(request):
+    return request.config.getoption('redis_addr')
+
+
+@pytest.fixture(scope='session')
+def rabbit_override_addr(request):
+    return request.config.getoption('rabbit_addr')
+
+
 @pytest.fixture(scope='session')
 def event_loop():
     asyncio.set_event_loop_policy(asyncio.DefaultEventLoopPolicy())
@@ -68,7 +106,12 @@ async def _docker_run(image, tag, image_port, check_fn):
 
 
 @pytest.fixture(scope='session')
-async def postgres(loop):
+async def postgres(loop, postgres_override_addr):
+    if postgres_override_addr:
+        host, port = postgres_override_addr.split(':')
+        yield host, int(port)
+        return
+
     timeout = 60
 
     async def check_fn(host, port):
@@ -93,7 +136,12 @@ async def postgres(loop):
 
 
 @pytest.fixture(scope='session')
-async def redis(loop):
+async def redis(loop, redis_override_addr):
+    if redis_override_addr:
+        host, port = redis_override_addr.split(':')
+        yield host, int(port)
+        return
+
     timeout = 60
 
     async def check_fn(host, port):
@@ -116,7 +164,12 @@ async def redis(loop):
 
 
 @pytest.fixture(scope='session')
-async def rabbit(loop):
+async def rabbit(loop, rabbit_override_addr):
+    if rabbit_override_addr:
+        host, port = rabbit_override_addr.split(':')
+        yield host, int(port)
+        return
+
     timeout = 60
 
     async def check_fn(host, port):
@@ -145,10 +198,15 @@ async def client(loop):
 
 
 @pytest.fixture(scope='session')
-def tracer_server(loop):
+def tracer_server(loop, tracer_override_addr):
     """Factory to create a TestServer instance, given an app.
     test_server(app, **kwargs)
     """
+    if tracer_override_addr:
+        host, port = tracer_override_addr.split(':')
+        yield host, int(port)
+        return
+
     servers = []
 
     async def go(**kwargs):
@@ -157,12 +215,14 @@ def tracer_server(loop):
 
         app = aiohttp.web.Application()
         app.router.add_post('/api/v2/spans', tracer_handle)
-        server = TestServer(app, port=None)
+        server = TestServer(app, host='127.0.0.1', port=None)
         await server.start_server(loop=loop, **kwargs)
         servers.append(server)
         return server
 
-    yield go
+    srv = loop.run_until_complete(go())
+
+    yield ('127.0.0.1', srv.port)
 
     async def finalize():
         while servers:
@@ -176,9 +236,7 @@ async def app(request, tracer_server, loop):
     app = Application(loop=loop)
 
     if request.param == 'with_tracer':
-        tracer_host = '127.0.0.1'
-        tracer_port = (await tracer_server()).port
-        tracer_addr = 'http://%s:%s/' % (tracer_host, tracer_port)
+        tracer_addr = 'http://%s:%s/' % (tracer_server[0], tracer_server[1])
         app.setup_logging(tracer_driver='zipkin', tracer_addr=tracer_addr,
                           tracer_name='test')
     yield app

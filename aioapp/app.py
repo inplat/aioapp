@@ -56,6 +56,8 @@ class Application(object):
         return self._components[item]
 
     def log_err(self, err):
+        if not err:
+            return
         if isinstance(err, BaseException):
             logging.exception(err)
         else:

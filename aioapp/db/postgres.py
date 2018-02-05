@@ -1,4 +1,5 @@
 import json
+import traceback
 from typing import Union, Dict, List, Any
 import asyncio
 import asyncpg
@@ -146,9 +147,11 @@ class ConnectionContextManager:
                 span.remote_endpoint("postgres")
             self._conn = await self._db._pool.acquire(
                 timeout=self._acquire_timeout)
-        except Exception as e:
+        except Exception as err:
             if span:
-                span.finish(exception=e)
+                span.tag('error.message', str(err))
+                span.annotate(traceback.format_exc())
+                span.finish(exception=err)
             raise
         finally:
             if span:
@@ -214,9 +217,11 @@ class Connection:
                 span.remote_endpoint("postgres")
                 span.annotate(repr(args))
             res = await self._conn.execute(query, *args, timeout=timeout)
-        except Exception as e:
+        except Exception as err:
             if span:
-                span.finish(exception=e)
+                span.tag('error.message', str(err))
+                span.annotate(traceback.format_exc())
+                span.finish(exception=err)
             raise
         finally:
             if span:
@@ -237,9 +242,11 @@ class Connection:
                 span.remote_endpoint("postgres")
                 span.annotate(repr(args))
             res = await self._conn.fetchrow(query, *args, timeout=timeout)
-        except Exception as e:
+        except Exception as err:
             if span:
-                span.finish(exception=e)
+                span.tag('error.message', str(err))
+                span.annotate(traceback.format_exc())
+                span.finish(exception=err)
             raise
         finally:
             if span:
@@ -260,9 +267,11 @@ class Connection:
                 span.remote_endpoint("postgres")
                 span.annotate(repr(args))
             res = await self._conn.fetch(query, *args, timeout=timeout)
-        except Exception as e:
+        except Exception as err:
             if span:
-                span.finish(exception=e)
+                span.tag('error.message', str(err))
+                span.annotate(traceback.format_exc())
+                span.finish(exception=err)
             raise
         finally:
             if span:
