@@ -27,7 +27,7 @@ def test_app_run():
         app.add('test', cmp)
         assert cmp is app.test
         with pytest.raises(AttributeError):
-            _ = app.test2  # not existing component
+            app.test2  # not existing component
         with pytest.raises(UserWarning):
             app.add('test', cmp)  # duplicate
         with pytest.raises(UserWarning):
