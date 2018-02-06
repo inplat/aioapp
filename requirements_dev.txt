@@ -9,7 +9,7 @@ pytest-asyncio==0.8.0
 pytest-aiohttp==0.3.0
 pytest-cov==2.5.1
 coverage==4.5
-docker==3.0.0
+docker==3.0.1
 
 Sphinx==1.6.7
 sphinx-rtd-theme==0.2.4
