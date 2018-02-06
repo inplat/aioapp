@@ -6,11 +6,10 @@ import aiozipkin as az
 from .error import PrepareError, GracefulExit
 from .tracer import Tracer, TracerTransport
 
-
 logger = logging.getLogger('aioapp')
 
 
-def _raise_graceful_exit():
+def _raise_graceful_exit():  # pragma: no cover
     raise GracefulExit()
 
 
@@ -45,6 +44,10 @@ class Application(object):
             raise UserWarning()
         if name in self._components:
             raise UserWarning()
+        if stop_after:
+            for cmp in stop_after:
+                if cmp not in self._components:
+                    raise UserWarning('Unknown component %s' % cmp)
         comp.loop = self.loop
         comp.app = self
         self._components[name] = comp
@@ -96,7 +99,7 @@ class Application(object):
         except PrepareError as e:
             self.log_err(e)
             return 1
-        except KeyboardInterrupt:
+        except KeyboardInterrupt:  # pragma: no cover
             return 1
         self.run_loop()
         self.loop.run_until_complete(self.run_shutdown())
@@ -137,8 +140,6 @@ class Application(object):
         await self._shutdown_tracer()
 
     async def _stop_comp(self, name):
-        if name not in self._components:
-            raise UserWarning('Unknown component %s' % name)
         if name in self._stopped:
             return
         if name in self._stop_deps and self._stop_deps[name]:
