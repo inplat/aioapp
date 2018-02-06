@@ -153,14 +153,14 @@ class Channel:
                     span = self.amqp.app.tracer.join_span(context)
                 span.name('amqp:message')
                 span.kind(azah.SERVER)
-                if envelope.routing_key:
+                if envelope.routing_key is not None:
                     span.tag('amqp.routing_key', envelope.routing_key)
-                if envelope.exchange_name:
+                if envelope.exchange_name is not None:
                     span.tag('amqp.exchange_name', envelope.exchange_name)
-                if properties.delivery_mode:
+                if properties.delivery_mode is not None:
                     span.tag('amqp.delivery_mode',
                              properties.delivery_mode)
-                if properties.expiration:
+                if properties.expiration is not None:
                     span.tag('amqp.expiration', properties.expiration)
                 span.start()
             try:
