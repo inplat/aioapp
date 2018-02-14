@@ -131,7 +131,7 @@ async def postgres(loop, postgres_override_addr):
                 time.sleep(.1)
         await conn.close()
 
-    async for cred in _docker_run('postgres', 'latest', 5432, check_fn):
+    async for cred in _docker_run('postgres', '10.1', 5432, check_fn):
         yield cred
 
 

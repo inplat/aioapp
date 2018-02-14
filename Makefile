@@ -84,7 +84,7 @@ test-all: venv ## run tests on every Python version with tox
 fast-test-prepare:
 	-docker run -d --rm --name aioapp-test-tracer -p "10100:9411" -p "10101:16686" -e COLLECTOR_ZIPKIN_HTTP_PORT=9411 jaegertracing/all-in-one:latest
 	-docker run -d --rm --name aioapp-test-rabbit -p "10102:5672" rabbitmq:latest
-	-docker run -d --rm --name aioapp-test-postrges -p "10103:5432" postgres:latest
+	-docker run -d --rm --name aioapp-test-postrges -p "10103:5432" postgres:10.1
 	-docker run -d --rm --name aioapp-test-redis -p "10104:6379" redis:latest
 
 
