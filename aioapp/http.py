@@ -6,7 +6,7 @@ from functools import partial
 import asyncio
 import traceback
 from urllib.parse import urlparse
-from aiohttp import web, ClientSession, hdrs
+from aiohttp import web, web_runner, ClientSession, hdrs, helpers
 from aiohttp import ClientResponse
 from aiohttp.payload import BytesPayload
 from aiohttp import TCPConnector
@@ -17,7 +17,7 @@ from .tracer import (Span, CLIENT, SERVER, HTTP_PATH, HTTP_METHOD, HTTP_HOST,
                      HTTP_URL)
 
 access_logger = logging.getLogger('aiohttp.access')
-SPAN_KEY = 'zipkin_span'
+SPAN_KEY = 'context_span'
 
 
 class Handler(object):
@@ -39,7 +39,14 @@ class ResponseCodec:
 
 class Server(Component):
     def __init__(self, host: str, port: int, handler: Type[Handler],
-                 access_log_format=None, access_log=access_logger,
+
+                 ssl_context=None,
+                 backlog=128,
+                 access_log_class=helpers.AccessLogger,
+                 access_log_format=helpers.AccessLogger.LOG_FORMAT,
+                 access_log=access_logger,
+                 reuse_address=None, reuse_port=None,
+
                  shutdown_timeout=60.0) -> None:
         if not issubclass(handler, Handler):
             raise UserWarning()
@@ -50,14 +57,21 @@ class Server(Component):
         self.host = host
         self.port = port
         self.error_handler = None
+        self.ssl_context = ssl_context
+        self.backlog = backlog
+        self.access_log_class = access_log_class
         self.access_log_format = access_log_format
         self.access_log = access_log
+        self.reuse_address = reuse_address
+        self.reuse_port = reuse_port
         self.shutdown_timeout = shutdown_timeout
         self.web_app_handler = None
         self.servers = None
         self.server_creations = None
         self.uris = None
         self.handler = handler(self)
+        self._sites: list = []
+        self._runner: web_runner.AppRunner = None
 
     async def wrap_middleware(self, app, handler):
         async def middleware_handler(request: web.Request):
@@ -137,37 +151,35 @@ class Server(Component):
 
     async def prepare(self):
         self.app.log_info("Preparing to start http server")
-        await self.web_app.startup()
-
-        make_handler_kwargs = dict()
-        if self.access_log_format is not None:
-            make_handler_kwargs['access_log_format'] = self.access_log_format
-        self.web_app_handler = self.web_app.make_handler(
-            loop=self.loop,
-            access_log=self.access_log,
-            **make_handler_kwargs)
-        self.server_creations, self.uris = web._make_server_creators(
-            self.web_app_handler,
-            loop=self.loop, ssl_context=None,
-            host=self.host, port=self.port, path=None, sock=None, backlog=128)
+        self._runner = web_runner.AppRunner(
+            self.web_app,
+            handle_signals=True,
+            access_log_class=self.access_log_class,
+            access_log_format=self.access_log_format,
+            access_log=self.access_log)
+        await self._runner.setup()
+        self._sites = []
+        self._sites.append(web_runner.TCPSite(
+            self._runner,
+            self.host,
+            self.port,
+            shutdown_timeout=self.shutdown_timeout,
+            ssl_context=self.ssl_context,
+            backlog=self.backlog,
+            reuse_address=self.reuse_address,
+            reuse_port=self.reuse_port))
 
     async def start(self):
         self.app.log_info("Starting http server")
-        self.servers = await asyncio.gather(*self.server_creations,
-                                            loop=self.loop)
-        self.app.log_info('HTTP server ready to handle connections on %s'
-                          '' % (', '.join(self.uris),))
+        await asyncio.gather(*[site.start() for site in self._sites],
+                             loop=self.loop)
+        self.app.log_info('HTTP server ready to handle connections on %s:%s'
+                          '' % (self.host, self.port))
 
     async def stop(self):
         self.app.log_info("Stopping http server")
-        server_closures = []
-        for srv in self.servers:
-            srv.close()
-            server_closures.append(srv.wait_closed())
-        await asyncio.gather(*server_closures, loop=self.loop)
-        await self.web_app.shutdown()
-        await self.web_app_handler.shutdown(self.shutdown_timeout)
-        await self.web_app.cleanup()
+        if self._runner:
+            await self._runner.cleanup()
 
 
 class Client(Component):

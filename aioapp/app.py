@@ -102,6 +102,8 @@ class Application(object):
         self.run_loop()
         self.loop.run_until_complete(self.run_shutdown())
         print("Bye")
+        if hasattr(self.loop, 'shutdown_asyncgens'):
+            self.loop.run_until_complete(self.loop.shutdown_asyncgens())
         self.loop.close()
         return 0
 

@@ -18,7 +18,7 @@ VENV_BIN=$(VENV_PATH)/bin
 BROWSER := $(VENV_BIN)/python -c "$$BROWSER_PYSCRIPT"
 
 .PHONY: clean
-clean: clean-pyc clean-test clean-venv clean-install clean-mypy ## remove all build, test, coverage and Python artifacts
+clean: clean-pyc clean-test clean-venv clean-install clean-mypy fast-test-stop ## remove all build, test, coverage and Python artifacts
 
 .PHONY: clean-pyc
 clean-pyc: ## remove Python file artifacts
@@ -84,12 +84,12 @@ test-all: venv ## run tests on every Python version with tox
 fast-test-prepare:
 	-docker run -d --rm --name aioapp-test-tracer -p "10100:9411" -p "10101:16686" -e COLLECTOR_ZIPKIN_HTTP_PORT=9411 jaegertracing/all-in-one:latest
 	-docker run -d --rm --name aioapp-test-rabbit -p "10102:5672" rabbitmq:latest
-	-docker run -d --rm --name aioapp-test-postrges -p "10103:5432" postgres:10.1
+	-docker run -d --rm --name aioapp-test-postrges -p "10103:5432" postgres:latest
 	-docker run -d --rm --name aioapp-test-redis -p "10104:6379" redis:latest
 
 
 .PHONY: fast-test
-fast-test:
+fast-test: venv
 	$(VENV_BIN)/pytest -s -v --rabbit-addr=127.0.0.1:10102 --postgres-addr=127.0.0.1:10103 --redis-addr=127.0.0.1:10104 --tracer-addr=127.0.0.1:10100 tests
 
 .PHONY: coverage

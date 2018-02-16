@@ -84,6 +84,13 @@ class Telegram(Component):
             self.app.log_info("Waiting for stopping telegram api calls")
             await asyncio.wait([self._stop_calls_fut], loop=self.app.loop)
 
+        # fixme support aiohttp>=3.0
+        if self.bot._session:
+            try:
+                await self.bot._session.close()
+            except Exception as err:
+                self.app.log_err(err)
+
     async def send_message(self, context_span, chat_id, text, **options):
         await self.api_call(context_span, "sendMessage",
                             chat_id=chat_id, text=text, **options)
