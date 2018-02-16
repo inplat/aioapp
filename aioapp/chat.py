@@ -88,6 +88,7 @@ class Telegram(Component):
         if self.bot._session:
             try:
                 await self.bot._session.close()
+                self.bot._session = None
             except Exception as err:
                 self.app.log_err(err)
 
