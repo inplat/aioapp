@@ -6,9 +6,8 @@ from typing import Type, Callable, Any
 from .app import Component
 from .error import PrepareError
 from aiotg import Bot, Chat, Sender
-import aiozipkin.span as azs
-import aiozipkin.aiohttp_helpers as azah
 from .misc import json_encode
+from .tracer import Span, CLIENT, SERVER
 
 
 class TelegramHandler(object):
@@ -89,17 +88,17 @@ class Telegram(Component):
         await self.api_call(context_span, "sendMessage",
                             chat_id=chat_id, text=text, **options)
 
-    async def api_call(self, context_span: azs.SpanAbc, method, **params):
+    async def api_call(self, context_span: Span, method, **params):
         self._active_calls += 1
         try:
             span = None
             if context_span:
-                span = context_span.tracer.new_child(context_span.context)
+                span = context_span.new_child()
                 span.start()
             try:
                 if span:
                     span.name('telegram:%s' % method)
-                    span.kind(azah.CLIENT)
+                    span.kind(CLIENT)
                     span.tag('telegram.method', method)
                     if 'chat_id' in params:
                         span.tag('telegram:chat_id', params.get('chat_id'))
@@ -119,7 +118,7 @@ class Telegram(Component):
             if self._stopping and self._active_calls == 0:
                 self._stop_calls_fut.set_result(1)
 
-    def add_command(self, regexp, fn: Callable[[azs.SpanAbc, 'TelegramChat',
+    def add_command(self, regexp, fn: Callable[[Span, 'TelegramChat',
                                                 Any], None]) -> None:
         """
         Manually register regexp based command
@@ -161,7 +160,7 @@ class Telegram(Component):
                 try:
                     if span:
                         span.name('telegram:in')
-                        span.kind(azah.SERVER)
+                        span.kind(SERVER)
                         span.tag('telegram:date',
                                  chat.message.get('date'))
                         span.tag('telegram:message_id',

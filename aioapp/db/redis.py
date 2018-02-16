@@ -1,10 +1,9 @@
 import asyncio
 import traceback
 import aioredis
-import aiozipkin as az
-import aiozipkin.span as azs
 from ..app import Component
 from ..error import PrepareError
+from ..tracer import Span, CLIENT
 
 
 class Redis(Component):
@@ -48,10 +47,10 @@ class Redis(Component):
             await self.pool.wait_closed()
 
     def connection(self,
-                   context_span: azs.SpanAbc) -> 'ConnectionContextManager':
+                   context_span: Span) -> 'ConnectionContextManager':
         return ConnectionContextManager(self, context_span)
 
-    async def execute(self, context_span: azs.SpanAbc, id: str,
+    async def execute(self, context_span: Span, id: str,
                       command: str, *args):
         async with self.connection(context_span) as conn:
             return await conn.execute(context_span, id, command, *args)
@@ -66,12 +65,11 @@ class ConnectionContextManager:
     async def __aenter__(self) -> 'Connection':
         span = None
         if self._context_span:
-            span = self._context_span.tracer.new_child(
-                self._context_span.context)
+            span = self._context_span.new_child()
             span.start()
         try:
             if span:
-                span.kind(az.CLIENT)
+                span.kind(CLIENT)
                 span.name("redis:Acquire")
                 span.remote_endpoint("redis")
                 span.tag('redis.size_before', self._redis.pool.size)
@@ -106,15 +104,15 @@ class Connection:
     def pubsub_channels(self):
         return self._conn.pubsub_channels
 
-    async def execute(self, context_span: azs.SpanAbc, id: str,
+    async def execute(self, context_span: Span, id: str,
                       command: str, *args):
         span = None
         if context_span:
-            span = context_span.tracer.new_child(context_span.context)
+            span = context_span.new_child()
             span.start()
         try:
             if span:
-                span.kind(az.CLIENT)
+                span.kind(CLIENT)
                 span.name("redis:%s" % id)
                 span.remote_endpoint("redis")
                 span.tag("redis.command", command)
@@ -131,15 +129,15 @@ class Connection:
                 span.finish()
         return res
 
-    async def execute_pubsub(self, context_span: azs.SpanAbc, id: str,
+    async def execute_pubsub(self, context_span: Span, id: str,
                              command, *channels_or_patterns):
         span = None
         if context_span:
-            span = context_span.tracer.new_child(context_span.context)
+            span = context_span.new_child()
             span.start()
         try:
             if span:
-                span.kind(az.CLIENT)
+                span.kind(CLIENT)
                 span.name("redis:%s" % id)
                 span.remote_endpoint("redis")
                 span.tag("redis.pubsub", command)

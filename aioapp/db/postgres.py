@@ -5,11 +5,10 @@ import asyncio
 import asyncpg
 import asyncpg.protocol
 import asyncpg.pool
-import aiozipkin as az
-import aiozipkin.span as azs
 from ..app import Component
 from ..error import PrepareError
 from ..misc import mask_url_pwd
+from ..tracer import Span, CLIENT
 
 JsonType = Union[None, int, float, str, bool, List[Any], Dict[str, Any]]
 
@@ -99,27 +98,27 @@ class Postgres(Component):
             self.app.log_info("Disconnecting from %s" % self._masked_url)
             await self.pool.close()
 
-    def connection(self, context_span: azs.SpanAbc,
+    def connection(self, context_span: Span,
                    acquire_timeout=None
                    ) -> 'ConnectionContextManager':
         return ConnectionContextManager(self, context_span,
                                         acquire_timeout=acquire_timeout)
 
-    async def query_one(self, context_span: azs.SpanAbc, id: str, query: str,
+    async def query_one(self, context_span: Span, id: str, query: str,
                         *args: Any, timeout: float = None
                         ) -> asyncpg.protocol.Record:
         async with self.connection(context_span) as conn:
             return await conn.query_one(context_span, id, query, *args,
                                         timeout=timeout)
 
-    async def query_all(self, context_span: azs.SpanAbc, id: str, query: str,
+    async def query_all(self, context_span: Span, id: str, query: str,
                         *args: Any, timeout: float = None
                         ) -> List[asyncpg.protocol.Record]:
         async with self.connection(context_span) as conn:
             return await conn.query_all(context_span, id, query, *args,
                                         timeout=timeout)
 
-    async def execute(self, context_span: azs.SpanAbc, id: str, query: str,
+    async def execute(self, context_span: Span, id: str, query: str,
                       *args: Any, timeout: float = None) -> str:
         async with self.connection(context_span) as conn:
             return await conn.execute(context_span, id, query, *args,
@@ -127,7 +126,7 @@ class Postgres(Component):
 
 
 class ConnectionContextManager:
-    def __init__(self, db: Postgres, context_span: azs.SpanAbc,
+    def __init__(self, db: Postgres, context_span: Span,
                  acquire_timeout: float = None) -> None:
         self._db = db
         self._conn = None
@@ -137,12 +136,11 @@ class ConnectionContextManager:
     async def __aenter__(self) -> 'Connection':
         span = None
         if self._context_span:
-            span = self._context_span.tracer.new_child(
-                self._context_span.context)
+            span = self._context_span.new_child()
             span.start()
         try:
             if span:
-                span.kind(az.CLIENT)
+                span.kind(CLIENT)
                 span.name("db:Acquire")
                 span.remote_endpoint("postgres")
             self._conn = await self._db._pool.acquire(
@@ -166,7 +164,7 @@ class ConnectionContextManager:
 
 
 class TransactionContextManager:
-    def __init__(self, context_span: azs.SpanAbc, conn: 'Connection',
+    def __init__(self, context_span: Span, conn: 'Connection',
                  isolation_level: str=None) -> None:
         self._conn = conn
         self._isolation_level = isolation_level
@@ -200,19 +198,19 @@ class Connection:
         self._db = db
         self._conn = conn
 
-    def xact(self, context_span: azs.SpanAbc,
+    def xact(self, context_span: Span,
              isolation_level: str=None) -> 'TransactionContextManager':
         return TransactionContextManager(context_span, self, isolation_level)
 
-    async def execute(self, context_span: azs.SpanAbc, id: str,
+    async def execute(self, context_span: Span, id: str,
                       query: str, *args: Any, timeout: float = None) -> str:
         span = None
         if context_span:
-            span = context_span.tracer.new_child(context_span.context)
+            span = context_span.new_child()
             span.start()
         try:
             if span:
-                span.kind(az.CLIENT)
+                span.kind(CLIENT)
                 span.name("db:%s" % id)
                 span.remote_endpoint("postgres")
                 span.annotate(repr(args))
@@ -228,16 +226,16 @@ class Connection:
                 span.finish()
         return res
 
-    async def query_one(self, context_span: azs.SpanAbc, id: str,
+    async def query_one(self, context_span: Span, id: str,
                         query: str, *args: Any,
                         timeout: float = None) -> asyncpg.protocol.Record:
         span = None
         if context_span:
-            span = context_span.tracer.new_child(context_span.context)
+            span = context_span.new_child()
             span.start()
         try:
             if span:
-                span.kind(az.CLIENT)
+                span.kind(CLIENT)
                 span.name("db:%s" % id)
                 span.remote_endpoint("postgres")
                 span.annotate(repr(args))
@@ -253,16 +251,16 @@ class Connection:
                 span.finish()
         return res
 
-    async def query_all(self, context_span: azs.SpanAbc, id: str,
+    async def query_all(self, context_span: Span, id: str,
                         query: str, *args: Any, timeout: float = None
                         ) -> List[asyncpg.protocol.Record]:
         span = None
         if context_span:
-            span = context_span.tracer.new_child(context_span.context)
+            span = context_span.new_child()
             span.start()
         try:
             if span:
-                span.kind(az.CLIENT)
+                span.kind(CLIENT)
                 span.name("db:%s" % id)
                 span.remote_endpoint("postgres")
                 span.annotate(repr(args))

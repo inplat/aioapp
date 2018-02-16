@@ -12,9 +12,7 @@ from typing import Optional, List, Callable
 from .app import Component
 from .error import PrepareError
 from .misc import mask_url_pwd, async_call
-import aiozipkin as az
-import aiozipkin.span as azs
-import aiozipkin.aiohttp_helpers as azah
+from .tracer import Span, CLIENT, SERVER
 
 #
 aioamqp.channel.logger.level = logging.CRITICAL
@@ -44,7 +42,7 @@ class Channel:
         if self.channel:
             await self.channel.close()
 
-    async def publish(self, context_span: azs.SpanAbc, payload: bytes,
+    async def publish(self, context_span: Span, payload: bytes,
                       exchange_name: str, routing_key: str,
                       properties: Optional[dict] = None,
                       mandatory: bool = False, immediate: bool = False,
@@ -54,10 +52,10 @@ class Channel:
         if context_span:
             span = context_span.new_child(
                 'amqp:publish {} {}'.format(exchange_name, routing_key),
-                azah.CLIENT
+                CLIENT
             )
             if propagate_trace:
-                headers = context_span.context.make_headers()
+                headers = context_span.make_headers()
                 properties = properties or {}
                 if 'headers' not in properties:
                     properties['headers'] = {}
@@ -92,19 +90,19 @@ class Channel:
             no_wait=no_wait, arguments=arguments)
         self._cons_tag = res['consumer_tag']
 
-    async def ack(self, context_span: azs.SpanAbc, delivery_tag: str,
+    async def ack(self, context_span: Span, delivery_tag: str,
                   multiple: bool = False):
         await self._ack_nack(context_span, True, delivery_tag, multiple)
 
-    async def nack(self, context_span: azs.SpanAbc, delivery_tag: str,
+    async def nack(self, context_span: Span, delivery_tag: str,
                    multiple: bool = False):
         await self._ack_nack(context_span, False, delivery_tag, multiple)
 
-    async def _ack_nack(self, context_span: azs.SpanAbc, is_ack: bool,
+    async def _ack_nack(self, context_span: Span, is_ack: bool,
                         delivery_tag: str, multiple: bool = False):
         span = None
         if context_span:
-            span = context_span.new_child('amqp:ack', azah.CLIENT)
+            span = context_span.new_child('amqp:ack', CLIENT)
             span.start()
         try:
             if is_ack:
@@ -143,16 +141,18 @@ class Channel:
         try:
             span = None
             if self.amqp.app.tracer:
-                context = az.make_context(properties.headers)
-                if context is None:
-                    sampled = azah.parse_sampled(properties.headers)
-                    debug = azah.parse_debug(properties.headers)
-                    span = self.amqp.app.tracer.new_trace(sampled=sampled,
-                                                          debug=debug)
-                else:
-                    span = self.amqp.app.tracer.join_span(context)
+                # context = az.make_context(properties.headers)
+                # if context is None:
+                #     sampled = azah.parse_sampled(properties.headers)
+                #     debug = azah.parse_debug(properties.headers)
+                #     span = self.amqp.app.tracer.new_trace(sampled=sampled,
+                #                                           debug=debug)
+                # else:
+                #     span = self.amqp.app.tracer.join_span(context)
+                span = self.amqp.app.tracer.new_trace_from_headers(
+                    properties.headers)
                 span.name('amqp:message')
-                span.kind(azah.SERVER)
+                span.kind(SERVER)
                 if envelope.routing_key is not None:
                     span.tag('amqp.routing_key', envelope.routing_key)
                 if envelope.exchange_name is not None:

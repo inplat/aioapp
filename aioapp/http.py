@@ -12,10 +12,9 @@ from aiohttp.payload import BytesPayload
 from aiohttp import TCPConnector
 from .app import Component
 import logging
-import aiozipkin as az
-import aiozipkin.aiohttp_helpers as azah
-import aiozipkin.span as azs
-import aiozipkin.constants as azc
+from .tracer import (Span, CLIENT, SERVER, HTTP_PATH, HTTP_METHOD, HTTP_HOST,
+                     HTTP_REQUEST_SIZE, HTTP_RESPONSE_SIZE, HTTP_STATUS_CODE,
+                     HTTP_URL)
 
 access_logger = logging.getLogger('aiohttp.access')
 SPAN_KEY = 'zipkin_span'
@@ -33,7 +32,7 @@ class Handler(object):
 
 
 class ResponseCodec:
-    async def decode(self, context_span: azs.SpanAbc,
+    async def decode(self, context_span: Span,
                      response: ClientResponse) -> Any:
         raise NotImplementedError()
 
@@ -63,32 +62,20 @@ class Server(Component):
     async def wrap_middleware(self, app, handler):
         async def middleware_handler(request: web.Request):
             if self.app.tracer:
-                context = az.make_context(request.headers)
-                if context is None:
-                    sampled = azah.parse_sampled(request.headers)
-                    debug = azah.parse_debug(request.headers)
-                    span = self.app.tracer.new_trace(sampled=sampled,
-                                                     debug=debug)
-                else:
-                    span = self.app.tracer.join_span(context)
+                span = self.app.tracer.new_trace_from_headers(request.headers)
                 request[SPAN_KEY] = span
-
-                if span.is_noop:
-                    resp, trace_str = await self._error_handle(span, request,
-                                                               handler)
-                    return resp
 
                 with span:
                     span_name = '{0} {1}'.format(request.method.upper(),
                                                  request.path)
                     span.name(span_name)
-                    span.kind(azah.SERVER)
-                    span.tag(azah.HTTP_PATH, request.path)
-                    span.tag(azah.HTTP_METHOD, request.method.upper())
+                    span.kind(SERVER)
+                    span.tag(HTTP_PATH, request.path)
+                    span.tag(HTTP_METHOD, request.method.upper())
                     _annotate_bytes(span, await request.read())
                     resp, trace_str = await self._error_handle(span, request,
                                                                handler)
-                    span.tag(azah.HTTP_STATUS_CODE, resp.status)
+                    span.tag(HTTP_STATUS_CODE, resp.status)
                     _annotate_bytes(span, resp.body)
                     if trace_str is not None:
                         span.annotate(trace_str)
@@ -196,7 +183,7 @@ class Client(Component):
         pass
 
     async def request(self,
-                      context_span: Optional[azs.SpanAbc],
+                      context_span: Optional[Span],
                       method: str,
                       url: str,
                       data: Any = None,
@@ -213,8 +200,8 @@ class Client(Component):
         # TODO optional propagate tracing headers
         span = None
         if context_span:
-            headers.update(context_span.context.make_headers())
-            span = context_span.tracer.new_child(context_span.context)
+            headers.update(context_span.make_headers())
+            span = context_span.new_child()
             span.start()
         try:
             async with ClientSession(loop=self.loop,
@@ -236,15 +223,15 @@ class Client(Component):
                     if span_params and 'tags' in span_params:
                         for tag_name, tag_val in span_params['tags'].items():
                             span.tag(tag_name, tag_val)
-                    span.kind(az.CLIENT)
-                    span.tag(azah.HTTP_METHOD, "POST")
-                    span.tag(azc.HTTP_HOST, parsed.netloc)
-                    span.tag(azc.HTTP_PATH, parsed.path)
+                    span.kind(CLIENT)
+                    span.tag(HTTP_METHOD, "POST")
+                    span.tag(HTTP_HOST, parsed.netloc)
+                    span.tag(HTTP_PATH, parsed.path)
                     if data:
-                        span.tag(azc.HTTP_REQUEST_SIZE, str(len(data)))
+                        span.tag(HTTP_REQUEST_SIZE, str(len(data)))
                     else:
-                        span.tag(azc.HTTP_REQUEST_SIZE, 0)
-                    span.tag(azc.HTTP_URL, url)
+                        span.tag(HTTP_REQUEST_SIZE, '0')
+                    span.tag(HTTP_URL, url)
                     if (span_params and 'annotate_request' in span_params and
                             span_params['annotate_request']):
                         _annotate_bytes(span, data)
@@ -257,8 +244,8 @@ class Client(Component):
                     if (span_params and 'annotate_response' in span_params and
                             span_params['annotate_request']):
                         _annotate_bytes(span, data)
-                    span.tag(azc.HTTP_STATUS_CODE, resp.status)
-                    span.tag(azc.HTTP_RESPONSE_SIZE,
+                    span.tag(HTTP_STATUS_CODE, resp.status)
+                    span.tag(HTTP_RESPONSE_SIZE,
                              str(len(response_body)))
                 if response_codec:
                     dec = await response_codec.decode(span, resp)
@@ -274,7 +261,7 @@ class Client(Component):
             if span:
                 span.finish()
 
-    async def get(self, context_span: azs.SpanAbc,
+    async def get(self, context_span: Span,
                   url: str,
                   headers: Optional[dict] = None,
                   read_timeout: Optional[float] = None,
@@ -288,7 +275,7 @@ class Client(Component):
                                   headers, read_timeout, conn_timeout, ssl_ctx,
                                   span_params, response_codec, **kwargs)
 
-    async def post(self, context_span: azs.SpanAbc,
+    async def post(self, context_span: Span,
                    url: str,
                    data: Any = None,
                    headers: Optional[dict] = None,

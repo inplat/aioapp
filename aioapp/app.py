@@ -2,9 +2,8 @@ import asyncio
 import signal
 import logging
 from typing import Dict
-import aiozipkin as az
 from .error import PrepareError, GracefulExit
-from .tracer import Tracer, TracerTransport
+from .tracer import Tracer
 
 logger = logging.getLogger('aioapp')
 
@@ -36,7 +35,7 @@ class Application(object):
         self._components: Dict[str, Component] = {}
         self._stop_deps: dict = {}
         self._stopped: list = []
-        self.tracer: Tracer = None
+        self.tracer: Tracer = Tracer(self.loop)
 
     def add(self, name: str, comp: Component,
             stop_after: list = None):
@@ -80,13 +79,12 @@ class Application(object):
                       tracer_send_inteval=3,
                       metrics_driver=None, metrics_addr=None,
                       metrics_name=None):
-        endpoint = az.create_endpoint(tracer_name)
-        sampler = az.Sampler(sample_rate=tracer_sample_rate)
-        transport = TracerTransport(self, tracer_driver, tracer_addr,
-                                    metrics_driver, metrics_addr, metrics_name,
-                                    send_inteval=tracer_send_inteval,
-                                    loop=self.loop)
-        self.tracer = Tracer(transport, sampler, endpoint)
+        if tracer_driver:
+            self.tracer.setup_tracer(tracer_driver, tracer_name, tracer_addr,
+                                     tracer_sample_rate, tracer_send_inteval)
+        if metrics_driver:
+            self.tracer.setup_metrics(metrics_driver, metrics_addr,
+                                      metrics_name)
 
     async def _shutdown_tracer(self):
         if self.tracer:
