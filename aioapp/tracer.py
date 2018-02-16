@@ -188,7 +188,8 @@ class Tracer:
 
         if not all(h in headers for h in (
                 azh.TRACE_ID_HEADER.lower(), azh.SPAN_ID_HEADER.lower())):
-            return None
+            return self.new_trace(sampled=azh.parse_sampled(headers),
+                                  debug=azh.parse_debug(headers))
 
         trace_id = headers.get(azh.TRACE_ID_HEADER.lower())
         if not trace_id:
