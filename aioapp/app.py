@@ -1,7 +1,7 @@
 import asyncio
 import signal
 import logging
-from typing import Dict
+from typing import Dict, Optional
 from .error import PrepareError, GracefulExit
 from .tracer import Tracer
 
@@ -77,11 +77,15 @@ class Application(object):
     def setup_logging(self, tracer_driver=None, tracer_addr=None,
                       tracer_name=None, tracer_sample_rate=1.0,
                       tracer_send_inteval=3,
+                      tracer_default_sampled: Optional[bool] = None,
+                      tracer_default_debug: Optional[bool] = None,
                       metrics_driver=None, metrics_addr=None,
                       metrics_name=None):
         if tracer_driver:
             self.tracer.setup_tracer(tracer_driver, tracer_name, tracer_addr,
-                                     tracer_sample_rate, tracer_send_inteval)
+                                     tracer_sample_rate, tracer_send_inteval,
+                                     tracer_default_sampled,
+                                     tracer_default_debug)
         if metrics_driver:
             self.tracer.setup_metrics(metrics_driver, metrics_addr,
                                       metrics_name)
