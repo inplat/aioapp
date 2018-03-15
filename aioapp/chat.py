@@ -162,8 +162,7 @@ class Telegram(Component):
             try:
                 span = None
                 if self.app.tracer:
-                    span = self.app.tracer.new_trace(sampled=True,
-                                                     debug=False)
+                    span = self.app.tracer.new_trace()
                     span.start()
                 try:
                     if span:

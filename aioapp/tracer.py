@@ -172,9 +172,16 @@ class Tracer:
         self.loop = loop
         self.tracer = None
         self.tracer_driver: Optional[str] = None
+        self.default_sampled: Optional[bool] = None
+        self.default_debug: Optional[bool] = None
 
     def new_trace(self, sampled: Optional[bool] = None,
-                  debug: bool = False):
+                  debug: Optional[bool] = None):
+        if sampled is None:
+            sampled = self.default_sampled
+        if debug is None:
+            debug = self.default_debug
+
         span = Span(
             tracer=self,
             trace_id=azu.generate_random_128bit_string(),
@@ -186,10 +193,17 @@ class Tracer:
     def new_trace_from_headers(self, headers: dict):
         headers = {k.lower(): v for k, v in headers.items()}
 
+        sampled = azh.parse_sampled(headers)
+        if sampled is None:
+            sampled = self.default_sampled
+        debug = azh.parse_debug(headers)
+        if debug is None:
+            debug = self.default_debug
+
         if not all(h in headers for h in (
                 azh.TRACE_ID_HEADER.lower(), azh.SPAN_ID_HEADER.lower())):
-            return self.new_trace(sampled=azh.parse_sampled(headers),
-                                  debug=azh.parse_debug(headers))
+            return self.new_trace(sampled=sampled,
+                                  debug=debug)
 
         trace_id = headers.get(azh.TRACE_ID_HEADER.lower())
         if not trace_id:
@@ -204,19 +218,23 @@ class Tracer:
             trace_id=trace_id,
             id=span_id,
             parent_id=headers.get(azh.PARENT_ID_HEADER.lower(), None),
-            sampled=azh.parse_sampled(headers),
+            sampled=sampled,
             shared=False,
-            debug=azh.parse_debug(headers),
+            debug=debug,
         )
 
         return span
 
     def setup_tracer(self, driver: str, name: str, addr: str,
-                     sample_rate: float, send_inteval: float) -> None:
+                     sample_rate: float, send_inteval: float,
+                     default_sampled: Optional[bool] = None,
+                     default_debug: Optional[bool] = None) -> None:
         if driver != DRIVER_ZIPKIN:
             raise UserWarning('Unsupported tracer driver')
 
         self.tracer_driver = driver
+        self.default_sampled = default_sampled
+        self.default_debug = default_debug
 
         endpoint = az.create_endpoint(name)
         sampler = az.Sampler(sample_rate=sample_rate)
@@ -225,7 +243,7 @@ class Tracer:
         self.tracer = az.Tracer(transport, sampler, endpoint)
 
     def setup_metrics(self, driver: str, addr: str, name: str) -> None:
-        if driver != 'statsd':
+        if driver != 'telegraf-influx':
             raise UserWarning('Unsupported metrics driver')
 
     async def close(self):
