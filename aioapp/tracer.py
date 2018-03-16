@@ -282,7 +282,7 @@ class Tracer:
         if driver != 'telegraf-influx':
             raise UserWarning('Unsupported metrics driver')
         url = URL(addr)
-        self.metrics = InfluxMetrics(self, url, self.loop)
+        self.metrics = InfluxMetrics(self, url, name, self.loop)
 
     async def close(self):
         if self.tracer:
@@ -293,9 +293,10 @@ class Tracer:
 
 class InfluxMetrics:
 
-    def __init__(self, tracer: Tracer, url: URL,
+    def __init__(self, tracer: Tracer, url: URL, name: Optional[str],
                  loop: asyncio.AbstractEventLoop) -> None:
         self.tracer = tracer
+        self.name = name
         self.url = url
         self.loop = loop
         self.transport = None
@@ -323,9 +324,11 @@ class InfluxMetrics:
     def send(self, span: Span):
         if self.transport:
             if SPAN_TYPE in span._tags:
-                name = span._tags.pop(SPAN_TYPE)
+                name = self._escape_name(span._tags.pop(SPAN_TYPE))
             else:
                 name = self._escape_name(span._name)
+            if self.name:
+                name = self.name + name
             tags = []
             for key, value in span._tags.items():
                 tag = '%s=%s' % (self._escape_name(key),
