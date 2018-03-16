@@ -74,7 +74,7 @@ lint: flake8 bandit mypy ## lint
 
 .PHONY: test
 test: venv ## run tests
-	$(VENV_BIN)/pytest
+	$(VENV_BIN)/pytest tests
 
 .PHONY: test-all
 test-all: venv ## run tests on every Python version with tox
@@ -82,29 +82,26 @@ test-all: venv ## run tests on every Python version with tox
 
 .PHONY: fast-test-prepare
 fast-test-prepare:
-	-docker run -d --rm --name aioapp-test-tracer -p "10100:9411" -p "10101:16686" -e COLLECTOR_ZIPKIN_HTTP_PORT=9411 jaegertracing/all-in-one:latest
-	-docker run -d --rm --name aioapp-test-rabbit -p "10102:5672" rabbitmq:latest
-	-docker run -d --rm --name aioapp-test-postrges -p "10103:5432" postgres:latest
-	-docker run -d --rm --name aioapp-test-redis -p "10104:6379" redis:latest
-
+	docker-compose up -d
+	@echo Grafana URL: http://localhost:10106/login
+	@echo Grafana username: admin
+	@echo Grafana password: admin
+	@echo Grafana Add data source as influxDb URL: http://influxdb:8086/ database: telegraf username: telegraf password: telegraf
 
 .PHONY: fast-test
 fast-test: venv
-	$(VENV_BIN)/pytest -s -v --rabbit-addr=127.0.0.1:10102 --postgres-addr=127.0.0.1:10103 --redis-addr=127.0.0.1:10104 --tracer-addr=127.0.0.1:10100 tests
+	$(VENV_BIN)/pytest -s -v --rabbit-addr=127.0.0.1:10102 --postgres-addr=127.0.0.1:10103 --redis-addr=127.0.0.1:10104 --tracer-addr=127.0.0.1:10100 --metrics-addr=udp://127.0.0.1:10105 tests
 
-.PHONY: coverage
+.PHONY: fast-coverage
 fast-coverage: venv ## make coverage report and open it in browser
 		$(VENV_BIN)/coverage run --source aioapp -m pytest tests -v --rabbit-addr=127.0.0.1:10102 --postgres-addr=127.0.0.1:10103 --redis-addr=127.0.0.1:10104 --tracer-addr=127.0.0.1:10100 tests
 		$(VENV_BIN)/coverage report -m
 		$(VENV_BIN)/coverage html
 		$(BROWSER) htmlcov/index.html
 
-.PHONY: fast-test-prepare
+.PHONY: fast-test-stop
 fast-test-stop:
-	-docker stop aioapp-test-tracer
-	-docker stop aioapp-test-postrges
-	-docker stop aioapp-test-redis
-	-docker stop aioapp-test-rabbit
+	docker-compose stop
 
 .PHONY: coverage-quiet
 coverage-quiet: venv ## make coverage report

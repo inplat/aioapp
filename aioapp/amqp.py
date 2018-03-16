@@ -12,7 +12,9 @@ from typing import Optional, List, Callable
 from .app import Component
 from .error import PrepareError
 from .misc import mask_url_pwd, async_call
-from .tracer import Span, CLIENT, SERVER
+from .tracer import (Span, CLIENT, SERVER, SPAN_TYPE, SPAN_KIND,
+                     SPAN_TYPE_AMQP, SPAN_KIND_AMQP_IN, SPAN_KIND_AMQP_OUT,
+                     SPAN_KIND_AMQP_ACK, SPAN_KIND_AMQP_NACK)
 
 #
 aioamqp.channel.logger.level = logging.CRITICAL
@@ -54,6 +56,8 @@ class Channel:
                 'amqp:publish {} {}'.format(exchange_name, routing_key),
                 CLIENT
             )
+            span.tag(SPAN_TYPE, SPAN_TYPE_AMQP)
+            span.tag(SPAN_KIND, SPAN_KIND_AMQP_OUT)
             if propagate_trace:
                 headers = context_span.make_headers()
                 properties = properties or {}
@@ -104,11 +108,14 @@ class Channel:
         if context_span:
             span = context_span.new_child('amqp:ack', CLIENT)
             span.start()
+            span.tag(SPAN_TYPE, SPAN_TYPE_AMQP)
         try:
             if is_ack:
+                span.tag(SPAN_KIND, SPAN_KIND_AMQP_ACK)
                 await self.channel.basic_client_ack(delivery_tag=delivery_tag,
                                                     multiple=multiple)
             else:
+                span.tag(SPAN_KIND, SPAN_KIND_AMQP_NACK)
                 await self.channel.basic_client_nack(delivery_tag=delivery_tag,
                                                      multiple=multiple)
             if span:
@@ -152,6 +159,8 @@ class Channel:
                 span = self.amqp.app.tracer.new_trace_from_headers(
                     properties.headers)
                 span.name('amqp:message')
+                span.tag(SPAN_TYPE, SPAN_TYPE_AMQP)
+                span.tag(SPAN_KIND, SPAN_KIND_AMQP_IN)
                 span.kind(SERVER)
                 if envelope.routing_key is not None:
                     span.tag('amqp.routing_key', envelope.routing_key)

@@ -3,7 +3,9 @@ import traceback
 import aioredis
 from ..app import Component
 from ..error import PrepareError
-from ..tracer import Span, CLIENT
+from ..tracer import (Span, CLIENT, SPAN_TYPE, SPAN_KIND, SPAN_TYPE_REDIS,
+                      SPAN_KIND_REDIS_ACQUIRE, SPAN_KIND_REDIS_QUERY,
+                      SPAN_KIND_REDIS_PUBSUB)
 
 
 class Redis(Component):
@@ -71,6 +73,8 @@ class ConnectionContextManager:
             if span:
                 span.kind(CLIENT)
                 span.name("redis:Acquire")
+                span.tag(SPAN_TYPE, SPAN_TYPE_REDIS)
+                span.tag(SPAN_KIND, SPAN_KIND_REDIS_ACQUIRE)
                 span.remote_endpoint("redis")
                 span.tag('redis.size_before', self._redis.pool.size)
                 span.tag('redis.free_before', self._redis.pool.freesize)
@@ -114,6 +118,8 @@ class Connection:
             if span:
                 span.kind(CLIENT)
                 span.name("redis:%s" % id)
+                span.tag(SPAN_TYPE, SPAN_TYPE_REDIS)
+                span.tag(SPAN_KIND, SPAN_KIND_REDIS_QUERY)
                 span.remote_endpoint("redis")
                 span.tag("redis.command", command)
                 span.annotate(repr(args))
@@ -139,6 +145,8 @@ class Connection:
             if span:
                 span.kind(CLIENT)
                 span.name("redis:%s" % id)
+                span.tag(SPAN_TYPE, SPAN_TYPE_REDIS)
+                span.tag(SPAN_KIND, SPAN_KIND_REDIS_PUBSUB)
                 span.remote_endpoint("redis")
                 span.tag("redis.pubsub", command)
                 span.annotate(repr(channels_or_patterns))

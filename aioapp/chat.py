@@ -7,7 +7,9 @@ from .app import Component
 from .error import PrepareError
 from aiotg import Bot, Chat, Sender
 from .misc import json_encode
-from .tracer import Span, CLIENT, SERVER
+from .tracer import (Span, CLIENT, SERVER, SPAN_TYPE, SPAN_KIND,
+                     SPAN_TYPE_TELEGRAM, SPAN_KIND_TELEGRAM_IN,
+                     SPAN_KIND_TELEGRAM_OUT)
 
 
 class TelegramHandler(object):
@@ -106,6 +108,8 @@ class Telegram(Component):
             try:
                 if span:
                     span.name('telegram:%s' % method)
+                    span.tag(SPAN_TYPE, SPAN_TYPE_TELEGRAM)
+                    span.tag(SPAN_KIND, SPAN_KIND_TELEGRAM_OUT)
                     span.kind(CLIENT)
                     span.tag('telegram.method', method)
                     if 'chat_id' in params:
@@ -168,6 +172,8 @@ class Telegram(Component):
                     if span:
                         span.name('telegram:in')
                         span.kind(SERVER)
+                        span.tag(SPAN_TYPE, SPAN_TYPE_TELEGRAM)
+                        span.tag(SPAN_KIND, SPAN_KIND_TELEGRAM_IN)
                         span.tag('telegram:date',
                                  chat.message.get('date'))
                         span.tag('telegram:message_id',

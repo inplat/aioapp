@@ -1,12 +1,16 @@
 from typing import Optional, Any
+from yarl import URL
 import time
 import re
 import asyncio
+import aioapp.app  # noqa
 import aiozipkin as az
 import aiozipkin.tracer as azt
 import aiozipkin.span as azs
 import aiozipkin.helpers as azh
 import aiozipkin.utils as azu
+from .misc import async_call
+
 
 STATS_CLEAN_NAME_RE = re.compile('[^0-9a-zA-Z_.-]')
 STATS_CLEAN_TAG_RE = re.compile('[^0-9a-zA-Z_=.-]')
@@ -22,6 +26,28 @@ HTTP_REQUEST_SIZE = 'http.request.size'
 HTTP_RESPONSE_SIZE = 'http.response.size'
 HTTP_STATUS_CODE = 'http.status_code'
 HTTP_URL = 'http.url'
+SPAN_TYPE = 'span_type'
+SPAN_TYPE_HTTP = 'http'
+SPAN_TYPE_POSTGRES = 'postgres'
+SPAN_TYPE_REDIS = 'redis'
+SPAN_TYPE_AMQP = 'amqp'
+SPAN_TYPE_TELEGRAM = 'telegram'
+
+SPAN_KIND = 'span_kind'
+SPAN_KIND_HTTP_IN = 'in'
+SPAN_KIND_HTTP_OUT = 'out'
+SPAN_KIND_POSTRGES_ACQUIRE = 'acquire'
+SPAN_KIND_POSTRGES_QUERY = 'query'
+SPAN_KIND_REDIS_ACQUIRE = 'acquire'
+SPAN_KIND_REDIS_QUERY = 'query'
+SPAN_KIND_REDIS_PUBSUB = 'pubsub'
+SPAN_KIND_AMQP_OUT = 'out'
+SPAN_KIND_AMQP_ACK = 'ack'
+SPAN_KIND_AMQP_NACK = 'nack'
+SPAN_KIND_AMQP_IN = 'in'
+SPAN_KIND_TELEGRAM_OUT = 'out'
+SPAN_KIND_TELEGRAM_IN = 'in'
+
 
 ERROR = 'error'
 LOCAL_COMPONENT = 'lc'
@@ -34,11 +60,13 @@ SERVER_ADDR = 'sa'
 class Span:
     def __init__(self,
                  tracer: 'Tracer',
+                 metrics: 'InfluxMetrics',
                  trace_id: str, id: Optional[str] = None,
                  parent_id: Optional[str] = None,
                  sampled: Optional[bool] = None, debug: bool = False,
                  shared: bool = False) -> None:
         self.tracer = tracer
+        self.metrics = metrics
         self.trace_id = trace_id
         self.id = id
         self.parent_id = parent_id
@@ -72,6 +100,7 @@ class Span:
                   kind: Optional[str] = None) -> 'Span':
         span = Span(
             tracer=self.tracer,
+            metrics=self.metrics,
             trace_id=self.trace_id,
             id=azu.generate_random_64bit_string(),
             parent_id=self.id,
@@ -103,6 +132,8 @@ class Span:
         if self._span and self.tracer.tracer_driver == DRIVER_ZIPKIN:
             span: azs.Span = self._span
             span.finish(ts=now, exception=exception)
+        if self.metrics:
+            self.metrics.send(self)
         return self
 
     def tag(self, key: str, value: str) -> 'Span':
@@ -168,9 +199,12 @@ class Span:
 
 class Tracer:
 
-    def __init__(self, loop: asyncio.AbstractEventLoop) -> None:
+    def __init__(self, app: 'aioapp.app.Application',
+                 loop: asyncio.AbstractEventLoop) -> None:
+        self.app = app
         self.loop = loop
-        self.tracer = None
+        self.tracer: Optional[az.Tracer] = None
+        self.metrics: Optional[InfluxMetrics] = None
         self.tracer_driver: Optional[str] = None
         self.default_sampled: Optional[bool] = None
         self.default_debug: Optional[bool] = None
@@ -184,6 +218,7 @@ class Tracer:
 
         span = Span(
             tracer=self,
+            metrics=self.metrics,
             trace_id=azu.generate_random_128bit_string(),
             id=azu.generate_random_64bit_string(),
             sampled=sampled,
@@ -215,6 +250,7 @@ class Tracer:
 
         span = Span(
             tracer=self,
+            metrics=self.metrics,
             trace_id=trace_id,
             id=span_id,
             parent_id=headers.get(azh.PARENT_ID_HEADER.lower(), None),
@@ -245,119 +281,82 @@ class Tracer:
     def setup_metrics(self, driver: str, addr: str, name: str) -> None:
         if driver != 'telegraf-influx':
             raise UserWarning('Unsupported metrics driver')
+        url = URL(addr)
+        self.metrics = InfluxMetrics(self, url, self.loop)
 
     async def close(self):
         if self.tracer:
             await self.tracer.close()
+        if self.metrics:
+            await self.metrics.close()
 
-#
-# class Tracer(azt.Tracer):
-#     async def stop(self):
-#         await self.close()
 
-#
-# class TracerTransport(azt.Transport):
-#     def __init__(self, app, driver, addr, metrics_diver, metrics_addr,
-#                  metrics_name, send_inteval, loop):
-#         """
-#         :type tracer: str
-#         :type tracer_url: str
-#         :type statsd_addr: str
-#         :type statsd_prefix: str
-#         :type send_inteval: float
-#         :type loop: asyncio.AbstractEventLoop
-#         """
-#         if driver is not None and driver != 'zipkin':
-#             raise UserWarning('Unsupported tracer driver')
-#         if metrics_diver is not None and metrics_diver != 'statsd':
-#             raise UserWarning('Unsupported metrics driver')
-#
-#         addr = addr or ''
-#         super(TracerTransport, self).__init__(addr,
-#                                               send_inteval=send_inteval,
-#                                               loop=loop)
-#         self.app = app
-#         self.loop = loop
-#         self._driver = driver
-#         self._metrics_diver = metrics_diver
-#         self._metrics_addr = metrics_addr
-#         self._metrics_name = metrics_name
-#
-#         self.stats = None
-#         if metrics_diver == 'statsd':
-#             addr = metrics_addr.split(':')
-#             host = addr[0]
-#             port = int(addr[1]) if len(addr) > 1 else 8125
-#             self.stats = StatsdClient(host, port)
-#             asyncio.ensure_future(self.stats.run(), loop=loop)
-#
-#     async def close(self):
-#         if self.stats:
-#             try:
-#                 await asyncio.sleep(.001, loop=self.loop)
-#                 await self.stats.stop()
-#             except Exception as e:
-#                 self.app.log_err(e)
-#         await super(TracerTransport, self).close()
-#
-#     async def _send(self):
-#         data = self._queue[:]
-#
-#         try:
-#             if self.stats:
-#                 await self._send_to_statsd(data)
-#         except Exception as e:
-#             self.app.log_err(e)
-#
-#         try:
-#             if self._driver == 'zipkin':
-#                 # TODO отправить pull request в aiozipkin: не отправлять
-#                 # TODO запрос, если self._queue пуста
-#                 await super(TracerTransport, self)._send()
-#             else:
-#                 self._queue = []
-#         except Exception as e:
-#             self.app.log_err(e)
-#
-#     async def _send_to_statsd(self, data):
-#         if self.stats:
-#             for rec in data:
-#                 tags = []
-#                 t = rec['tags']
-#                 if azc.HTTP_PATH in t and 'kind' in rec:
-#                     name = 'http'
-#                     if rec["kind"] == 'SERVER':
-#                         tags.append(('kind', 'in'))
-#                     else:
-#                         tags.append(('kind', 'out'))
-#
-#                     copy_tags = {
-#                         azc.HTTP_STATUS_CODE: 'status',
-#                         azc.HTTP_METHOD: 'method',
-#                         azc.HTTP_HOST: 'host',
-#                     }
-#                     for tag_key, tag_name in copy_tags.items():
-#                         if tag_key in t:
-#                             tags.append((tag_name, t[tag_key]))
-#
-#                 elif rec['name'].startswith('db:'):
-#                     name = 'db'
-#                     tags.append(('kind', rec['name'][len('db:'):]))
-#                 elif rec['name'].startswith('redis:'):
-#                     name = 'redis'
-#                     tags.append(('kind', rec['name'][len('redis:'):]))
-#                 else:
-#                     name = rec['name']
-#
-#                 name = name.replace(' ', '_').replace(':', '_')
-#                 name = self._metrics_name + name
-#                 name = STATS_CLEAN_NAME_RE.sub('', name)
-#
-#                 if len(tags) > 0:
-#                     for tag in tags:
-#                         t = tag[1].replace(':', '-')
-#                         t = STATS_CLEAN_TAG_RE.sub('', t)
-#                         name += ',' + tag[0] + "=" + t
-#                 self.stats.send_timer(name,
-#                                       int(round(rec["duration"] / 1000)),
-#                                       rate=1.0)
+class InfluxMetrics:
+
+    def __init__(self, tracer: Tracer, url: URL,
+                 loop: asyncio.AbstractEventLoop) -> None:
+        self.tracer = tracer
+        self.url = url
+        self.loop = loop
+        self.transport = None
+        self.closing = False
+        self._connect()
+
+    def _connect(self):
+        if self.url.scheme == 'udp':
+            asyncio.ensure_future(self._async_conn(), loop=self.loop)
+        else:
+            raise NotImplementedError(str(self.url))
+
+    async def _async_conn(self):
+        connect = self.loop.create_datagram_endpoint(
+            lambda: self,
+            remote_addr=(self.url.host, self.url.port))
+        self.transport, self.protocol = await connect
+
+    def _escape_name(self, name):
+        name = name.replace('\n', '')
+        name = name.replace(',', '\\,')
+        name = name.replace(' ', '\\ ')
+        return name
+
+    def send(self, span: Span):
+        if self.transport:
+            if SPAN_TYPE in span._tags:
+                name = span._tags.pop(SPAN_TYPE)
+            else:
+                name = self._escape_name(span._name)
+            tags = []
+            for key, value in span._tags.items():
+                tag = '%s=%s' % (self._escape_name(key),
+                                 self._escape_name(value))
+                tags.append(tag)
+
+            duration = span._finish_stamp - span._start_stamp
+
+            if tags:
+                name = name + ',' + (','.join(tags))
+            line = '%s duration=%s %s\n' % (name,
+                                            duration,
+                                            span._finish_stamp * 1000)
+            self.transport.sendto(line.encode())
+
+    def connection_made(self, transport):
+        self.transport = transport
+
+    def datagram_received(self, data, addr):
+        pass
+
+    def error_received(self, exc):
+        self.tracer.app.log_err(exc)
+
+    def connection_lost(self, exc):
+        self.tracer.app.log_err(exc)
+        self.transport = None
+        if not self.closing:
+            async_call(self.loop, self._connect)
+
+    async def close(self):
+        self.closing = True
+        if self.transport:
+            self.transport.close()

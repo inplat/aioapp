@@ -35,7 +35,7 @@ class Application(object):
         self._components: Dict[str, Component] = {}
         self._stop_deps: dict = {}
         self._stopped: list = []
-        self.tracer: Tracer = Tracer(self.loop)
+        self.tracer: Tracer = Tracer(self, self.loop)
 
     def add(self, name: str, comp: Component,
             stop_after: list = None):

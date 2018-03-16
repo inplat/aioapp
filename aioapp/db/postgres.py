@@ -8,7 +8,8 @@ import asyncpg.pool
 from ..app import Component
 from ..error import PrepareError
 from ..misc import mask_url_pwd
-from ..tracer import Span, CLIENT
+from ..tracer import (Span, CLIENT, SPAN_TYPE, SPAN_KIND, SPAN_TYPE_POSTGRES,
+                      SPAN_KIND_POSTRGES_ACQUIRE, SPAN_KIND_POSTRGES_QUERY)
 
 JsonType = Union[None, int, float, str, bool, List[Any], Dict[str, Any]]
 
@@ -142,6 +143,8 @@ class ConnectionContextManager:
             if span:
                 span.kind(CLIENT)
                 span.name("db:Acquire")
+                span.tag(SPAN_TYPE, SPAN_TYPE_POSTGRES)
+                span.tag(SPAN_KIND, SPAN_KIND_POSTRGES_ACQUIRE)
                 span.remote_endpoint("postgres")
             self._conn = await self._db._pool.acquire(
                 timeout=self._acquire_timeout)
@@ -212,6 +215,8 @@ class Connection:
             if span:
                 span.kind(CLIENT)
                 span.name("db:%s" % id)
+                span.tag(SPAN_TYPE, SPAN_TYPE_POSTGRES)
+                span.tag(SPAN_KIND, SPAN_KIND_POSTRGES_QUERY)
                 span.remote_endpoint("postgres")
                 span.annotate(repr(args))
             res = await self._conn.execute(query, *args, timeout=timeout)
@@ -237,6 +242,8 @@ class Connection:
             if span:
                 span.kind(CLIENT)
                 span.name("db:%s" % id)
+                span.tag(SPAN_TYPE, SPAN_TYPE_POSTGRES)
+                span.tag(SPAN_KIND, SPAN_KIND_POSTRGES_QUERY)
                 span.remote_endpoint("postgres")
                 span.annotate(repr(args))
             res = await self._conn.fetchrow(query, *args, timeout=timeout)
@@ -262,6 +269,8 @@ class Connection:
             if span:
                 span.kind(CLIENT)
                 span.name("db:%s" % id)
+                span.tag(SPAN_TYPE, SPAN_TYPE_POSTGRES)
+                span.tag(SPAN_KIND, SPAN_KIND_POSTRGES_QUERY)
                 span.remote_endpoint("postgres")
                 span.annotate(repr(args))
             res = await self._conn.fetch(query, *args, timeout=timeout)

@@ -14,7 +14,8 @@ from .app import Component
 import logging
 from .tracer import (Span, CLIENT, SERVER, HTTP_PATH, HTTP_METHOD, HTTP_HOST,
                      HTTP_REQUEST_SIZE, HTTP_RESPONSE_SIZE, HTTP_STATUS_CODE,
-                     HTTP_URL)
+                     HTTP_URL, SPAN_TYPE, SPAN_KIND, SPAN_TYPE_HTTP,
+                     SPAN_KIND_HTTP_IN, SPAN_KIND_HTTP_OUT)
 
 access_logger = logging.getLogger('aiohttp.access')
 SPAN_KEY = 'context_span'
@@ -84,6 +85,8 @@ class Server(Component):
                                                  request.path)
                     span.name(span_name)
                     span.kind(SERVER)
+                    span.tag(SPAN_TYPE, SPAN_TYPE_HTTP)
+                    span.tag(SPAN_KIND, SPAN_KIND_HTTP_IN)
                     span.tag(HTTP_PATH, request.path)
                     span.tag(HTTP_METHOD, request.method.upper())
                     _annotate_bytes(span, await request.read())
@@ -236,6 +239,8 @@ class Client(Component):
                         for tag_name, tag_val in span_params['tags'].items():
                             span.tag(tag_name, tag_val)
                     span.kind(CLIENT)
+                    span.tag(SPAN_TYPE, SPAN_TYPE_HTTP)
+                    span.tag(SPAN_KIND, SPAN_KIND_HTTP_OUT)
                     span.tag(HTTP_METHOD, "POST")
                     span.tag(HTTP_HOST, parsed.netloc)
                     span.tag(HTTP_PATH, parsed.path)

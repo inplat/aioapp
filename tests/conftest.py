@@ -1,4 +1,5 @@
 import gc
+from yarl import URL
 import time
 import logging
 import aiohttp
@@ -29,6 +30,10 @@ def pytest_addoption(parser):
     parser.addoption("--tracer-addr", dest="tracer_addr",
                      help="Use this tracer instead of emulator if specified",
                      metavar="host:port")
+    parser.addoption("--metrics-addr", dest="metrics_addr",
+                     help="Use this metrics collector instead of emulator if "
+                          "specified",
+                     metavar="host:port")
     parser.addoption("--postgres-addr", dest="postgres_addr",
                      help="Use this postgres instead of docker image "
                           "if specified",
@@ -41,6 +46,11 @@ def pytest_addoption(parser):
                      help="Use this rabbitmq instead of docker image "
                           "if specified",
                      metavar="host:port")
+
+
+@pytest.fixture(scope='session')
+def metrics_override_addr(request):
+    return request.config.getoption('metrics_addr')
 
 
 @pytest.fixture(scope='session')
@@ -77,8 +87,16 @@ def loop(event_loop):
     return event_loop
 
 
-def get_free_port():
-    sock = socket.socket()
+def get_free_port(protocol='tcp'):
+    family = socket.AF_INET
+    if protocol == 'tcp':
+        type = socket.SOCK_STREAM
+    elif protocol == 'udp':
+        type = socket.SOCK_DGRAM
+    else:
+        raise UserWarning()
+
+    sock = socket.socket(family, type)
     try:
         sock.bind(('', 0))
         return sock.getsockname()[1]
@@ -231,13 +249,54 @@ def tracer_server(loop, tracer_override_addr):
     loop.run_until_complete(finalize())
 
 
+@pytest.fixture(scope='session')
+def metrics_server(loop, metrics_override_addr):
+    if metrics_override_addr:
+        addr = URL(metrics_override_addr)
+        yield (
+            addr.scheme or 'udp',
+            addr.host or '127.0.0.1',
+            addr.port or 8094,
+        )
+        return
+
+    class TelegrafProtocol:
+        def connection_made(self, transport):
+            self.transport = transport
+
+        def datagram_received(self, data, addr):
+            print('TELEGRAF received', data, 'from', addr)
+            pass
+
+    scheme = 'udp'
+    host = '127.0.0.1'
+    port = get_free_port(scheme)
+
+    listen = loop.create_datagram_endpoint(
+        TelegrafProtocol, local_addr=(host, port))
+    transport, protocol = loop.run_until_complete(listen)
+
+    yield (scheme, host, port)
+
+    transport.close()
+
+
 @pytest.fixture(params=["with_tracer", "without_tracer"])
-async def app(request, tracer_server, loop):
+async def app(request, tracer_server, metrics_server, loop):
     app = Application(loop=loop)
 
     if request.param == 'with_tracer':
-        tracer_addr = 'http://%s:%s/' % (tracer_server[0], tracer_server[1])
-        app.setup_logging(tracer_driver='zipkin', tracer_addr=tracer_addr,
-                          tracer_name='test')
+        tracer_addr = 'http://%s:%s/' % (tracer_server[0],
+                                         tracer_server[1])
+        metrics_addr = '%s://%s:%s' % (metrics_server[0],
+                                       metrics_server[1],
+                                       metrics_server[2])
+        app.setup_logging(tracer_driver='zipkin',
+                          tracer_addr=tracer_addr,
+                          tracer_name='test',
+                          metrics_driver='telegraf-influx',
+                          metrics_name='test_',
+                          metrics_addr=metrics_addr
+                          )
     yield app
     await app.run_shutdown()
