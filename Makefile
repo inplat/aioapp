@@ -53,7 +53,6 @@ ifeq ($(VENV_EXISTS), 1)
 	@echo virtual env already initialized
 else
 	virtualenv -p python3.6 .venv
-	$(VENV_BIN)/pip install Cython==0.27.3
 	$(VENV_BIN)/pip install -r requirements_dev.txt
 endif
 
