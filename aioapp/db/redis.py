@@ -1,11 +1,44 @@
 import asyncio
 import traceback
 import aioredis
+from typing import Optional
 from ..app import Component
 from ..error import PrepareError
 from ..tracer import (Span, CLIENT, SPAN_TYPE, SPAN_KIND, SPAN_TYPE_REDIS,
                       SPAN_KIND_REDIS_ACQUIRE, SPAN_KIND_REDIS_QUERY,
                       SPAN_KIND_REDIS_PUBSUB)
+
+
+class RedisTracerConfig:
+
+    def on_acquire_start(self, context_span: 'Span') -> None:
+        pass
+
+    def on_acquire_end(self, context_span: 'Span',
+                       err: Optional[Exception]) -> None:
+        if err:
+            context_span.tag('error.message', str(err))
+            context_span.annotate(traceback.format_exc())
+
+    def on_query_start(self, context_span: 'Span', id: str,
+                       command: str) -> None:
+        pass
+
+    def on_query_end(self, context_span: 'Span',
+                     err: Optional[Exception], result) -> None:
+        if err:
+            context_span.tag('error.message', str(err))
+            context_span.annotate(traceback.format_exc())
+
+    def on_pubsub_start(self, context_span: 'Span', id: str, command: str,
+                        channels_or_patterns) -> None:
+        pass
+
+    def on_pubsub_end(self, context_span: 'Span',
+                      err: Optional[Exception], result) -> None:
+        if err:
+            context_span.tag('error.message', str(err))
+            context_span.annotate(traceback.format_exc())
 
 
 class Redis(Component):
@@ -49,8 +82,10 @@ class Redis(Component):
             await self.pool.wait_closed()
 
     def connection(self,
-                   context_span: Span) -> 'ConnectionContextManager':
-        return ConnectionContextManager(self, context_span)
+                   context_span: Span,
+                   tracer_config: Optional[RedisTracerConfig] = None
+                   ) -> 'ConnectionContextManager':
+        return ConnectionContextManager(self, context_span, tracer_config)
 
     async def execute(self, context_span: Span, id: str,
                       command: str, *args):
@@ -59,16 +94,17 @@ class Redis(Component):
 
 
 class ConnectionContextManager:
-    def __init__(self, redis, context_span) -> None:
+    def __init__(self, redis, context_span,
+                 tracer_config: Optional[RedisTracerConfig] = None) -> None:
         self._redis = redis
         self._conn = None
         self._context_span = context_span
+        self._tracer_config = tracer_config
 
     async def __aenter__(self) -> 'Connection':
         span = None
         if self._context_span:
             span = self._context_span.new_child()
-            span.start()
         try:
             if span:
                 span.kind(CLIENT)
@@ -78,16 +114,20 @@ class ConnectionContextManager:
                 span.remote_endpoint("redis")
                 span.tag('redis.size_before', self._redis.pool.size)
                 span.tag('redis.free_before', self._redis.pool.freesize)
+                span.start()
+                if self._tracer_config:
+                    self._tracer_config.on_acquire_start(span)
             self._conn = await self._redis.pool.acquire()
+            if span:
+                if self._tracer_config:
+                    self._tracer_config.on_acquire_end(span, None)
+                span.finish()
         except Exception as err:
             if span:
-                span.tag('error.message', str(err))
-                span.annotate(traceback.format_exc())
+                if self._tracer_config:
+                    self._tracer_config.on_acquire_end(span, err)
                 span.finish(exception=err)
             raise
-        finally:
-            if span:
-                span.finish()
         c = Connection(self._redis, self._conn)
         return c
 
@@ -109,11 +149,11 @@ class Connection:
         return self._conn.pubsub_channels
 
     async def execute(self, context_span: Span, id: str,
-                      command: str, *args):
+                      command: str, *args,
+                      tracer_config: Optional[RedisTracerConfig] = None):
         span = None
         if context_span:
             span = context_span.new_child()
-            span.start()
         try:
             if span:
                 span.kind(CLIENT)
@@ -123,24 +163,31 @@ class Connection:
                 span.remote_endpoint("redis")
                 span.tag("redis.command", command)
                 span.annotate(repr(args))
+                span.start()
+                if tracer_config:
+                    tracer_config.on_query_start(span, id, command)
             res = await self._conn.execute(command, *args)
+            if span:
+                if tracer_config:
+                    tracer_config.on_query_end(span, None, res)
+                span.finish()
         except Exception as err:
             if span:
-                span.tag('error.message', str(err))
-                span.annotate(traceback.format_exc())
+                if tracer_config:
+                    tracer_config.on_query_end(span, err, None)
                 span.finish(exception=err)
             raise
-        finally:
-            if span:
-                span.finish()
+
         return res
 
     async def execute_pubsub(self, context_span: Span, id: str,
-                             command, *channels_or_patterns):
+                             command,
+                             *channels_or_patterns,
+                             tracer_config: Optional[
+                                 RedisTracerConfig] = None):
         span = None
         if context_span:
             span = context_span.new_child()
-            span.start()
         try:
             if span:
                 span.kind(CLIENT)
@@ -150,15 +197,21 @@ class Connection:
                 span.remote_endpoint("redis")
                 span.tag("redis.pubsub", command)
                 span.annotate(repr(channels_or_patterns))
+                span.start()
+                if tracer_config:
+                    tracer_config.on_pubsub_start(span, id, command,
+                                                  channels_or_patterns)
             res = await self._conn.execute_pubsub(command,
                                                   *channels_or_patterns)
+            if span:
+                if tracer_config:
+                    tracer_config.on_pubsub_end(span, None, res)
+                span.finish()
         except Exception as err:
             if span:
-                span.tag('error.message', str(err))
-                span.annotate(traceback.format_exc())
+                if tracer_config:
+                    tracer_config.on_pubsub_end(span, err, None)
                 span.finish(exception=err)
             raise
-        finally:
-            if span:
-                span.finish()
+
         return res

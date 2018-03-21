@@ -23,6 +23,42 @@ aioamqp.protocol.logger.level = logging.CRITICAL
 STOP_TIMEOUT = 5
 
 
+class AmqpTracerConfig:
+    def on_publish_start(self, context_span: 'Span',
+                         channel: 'aioamqp.channel.Channel', payload: bytes,
+                         exchange_name: str, routing_key: str,
+                         properties: Optional[dict], mandatory: bool,
+                         immediate: bool) -> None:
+        pass
+
+    def on_publish_end(self, context_span: 'Span',
+                       channel: 'aioamqp.channel.Channel',
+                       err: Optional[Exception]) -> None:
+        if err:
+            context_span.tag('error.message', str(err))
+            context_span.annotate(traceback.format_exc())
+
+    def on_ack_start(self, span: 'Span', channel: 'aioamqp.channel.Channel',
+                     delivery_tag: str, multiple: bool) -> None:
+        pass
+
+    def on_ack_end(self, span: 'Span', channel: 'aioamqp.channel.Channel',
+                   err: Optional[Exception]) -> None:
+        if err:
+            span.tag('error.message', str(err))
+            span.annotate(traceback.format_exc())
+
+    def on_nack_start(self, span: 'Span', channel: 'aioamqp.channel.Channel',
+                      delivery_tag: str, multiple: bool) -> None:
+        pass
+
+    def on_nack_end(self, span: 'Span', channel: 'aioamqp.channel.Channel',
+                    err: Optional[Exception]) -> None:
+        if err:
+            span.tag('error.message', str(err))
+            span.annotate(traceback.format_exc())
+
+
 class Channel:
     name: Optional[str] = None
     amqp: Optional['Amqp'] = None
@@ -48,7 +84,7 @@ class Channel:
                       exchange_name: str, routing_key: str,
                       properties: Optional[dict] = None,
                       mandatory: bool = False, immediate: bool = False,
-                      span_params: Optional[dict] = None,
+                      tracer_config: Optional[AmqpTracerConfig] = None,
                       propagate_trace: bool = True):
         span = None
         if context_span:
@@ -56,8 +92,8 @@ class Channel:
                 'amqp:publish {} {}'.format(exchange_name, routing_key),
                 CLIENT
             )
-            span.tag(SPAN_TYPE, SPAN_TYPE_AMQP)
-            span.tag(SPAN_KIND, SPAN_KIND_AMQP_OUT)
+            context_span.tag(SPAN_TYPE, SPAN_TYPE_AMQP)
+            context_span.tag(SPAN_KIND, SPAN_KIND_AMQP_OUT)
             if propagate_trace:
                 headers = context_span.make_headers()
                 properties = properties or {}
@@ -65,6 +101,11 @@ class Channel:
                     properties['headers'] = {}
                 properties['headers'].update(headers)
             span.start()
+            if tracer_config:
+                tracer_config.on_publish_start(span, self.channel, payload,
+                                               exchange_name, routing_key,
+                                               properties, mandatory,
+                                               immediate)
         try:
             await self.channel.basic_publish(payload, exchange_name,
                                              routing_key,
@@ -72,11 +113,13 @@ class Channel:
                                              mandatory=mandatory,
                                              immediate=immediate)
             if span:
+                if tracer_config:
+                    tracer_config.on_publish_end(span, self.channel, None)
                 span.finish()
         except Exception as err:
             if span:
-                span.tag('error.message', str(err))
-                span.annotate(traceback.format_exc())
+                if tracer_config:
+                    tracer_config.on_publish_end(span, self.channel, err)
                 span.finish(exception=err)
             raise
 
@@ -95,35 +138,53 @@ class Channel:
         self._cons_tag = res['consumer_tag']
 
     async def ack(self, context_span: Span, delivery_tag: str,
-                  multiple: bool = False):
-        await self._ack_nack(context_span, True, delivery_tag, multiple)
+                  multiple: bool = False,
+                  tracer_config: Optional[AmqpTracerConfig] = None) -> None:
+        await self._ack_nack(context_span, True, delivery_tag, multiple,
+                             tracer_config)
 
     async def nack(self, context_span: Span, delivery_tag: str,
-                   multiple: bool = False):
-        await self._ack_nack(context_span, False, delivery_tag, multiple)
+                   multiple: bool = False,
+                   tracer_config: Optional[AmqpTracerConfig] = None) -> None:
+        await self._ack_nack(context_span, False, delivery_tag, multiple,
+                             tracer_config)
 
     async def _ack_nack(self, context_span: Span, is_ack: bool,
-                        delivery_tag: str, multiple: bool = False):
+                        delivery_tag: str, multiple: bool = False,
+                        tracer_config: Optional[AmqpTracerConfig] = None):
         span = None
         if context_span:
+            tracer_config = tracer_config or AmqpTracerConfig()
             span = context_span.new_child('amqp:ack', CLIENT)
-            span.start()
             span.tag(SPAN_TYPE, SPAN_TYPE_AMQP)
+            span.start()
         try:
             if is_ack:
-                span.tag(SPAN_KIND, SPAN_KIND_AMQP_ACK)
+                if span:
+                    span.tag(SPAN_KIND, SPAN_KIND_AMQP_ACK)
+                    tracer_config.on_ack_start(span, self.channel,
+                                               delivery_tag, multiple)
                 await self.channel.basic_client_ack(delivery_tag=delivery_tag,
                                                     multiple=multiple)
+                if span:
+                    tracer_config.on_ack_end(span, self.channel, None)
             else:
                 span.tag(SPAN_KIND, SPAN_KIND_AMQP_NACK)
+                if span:
+                    tracer_config.on_nack_start(span, self.channel,
+                                                delivery_tag, multiple)
                 await self.channel.basic_client_nack(delivery_tag=delivery_tag,
                                                      multiple=multiple)
+                if span:
+                    tracer_config.on_nack_end(span, self.channel, None)
             if span:
                 span.finish()
         except Exception as err:
             if span:
-                span.tag('error.message', str(err))
-                span.annotate(traceback.format_exc())
+                if is_ack:
+                    tracer_config.on_ack_end(span, self.channel, err)
+                else:
+                    tracer_config.on_nack_end(span, self.channel, err)
                 span.finish(exception=err)
             raise
 

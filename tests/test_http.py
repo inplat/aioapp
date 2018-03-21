@@ -1,6 +1,6 @@
 import pytest
 from aiohttp import web
-from aioapp.http import Server, Client, Handler, ResponseCodec
+from aioapp.http import Server, Client, Handler
 import aiozipkin.span as azs
 
 
@@ -19,11 +19,6 @@ def test_server_fail_create(unused_tcp_port):
             port=unused_tcp_port,
             handler=SomeClass
         )
-
-
-async def test_response_code_abstact_create():
-    with pytest.raises(NotImplementedError):
-        await ResponseCodec().decode(None, None)
 
 
 async def test_server(app, unused_tcp_port):

@@ -1,5 +1,6 @@
 import traceback
 from functools import partial
+from typing import Optional
 import asyncio
 from abc import ABCMeta
 from typing import Type, Callable, Any
@@ -10,6 +11,19 @@ from .misc import json_encode
 from .tracer import (Span, CLIENT, SERVER, SPAN_TYPE, SPAN_KIND,
                      SPAN_TYPE_TELEGRAM, SPAN_KIND_TELEGRAM_IN,
                      SPAN_KIND_TELEGRAM_OUT)
+
+
+class TelegramTracerConfig:
+
+    def on_api_call_start(self, context_span: 'Span', method: str,
+                          params: dict) -> None:
+        pass
+
+    def on_api_call_end(self, context_span: 'Span',
+                        err: Optional[Exception], result) -> None:
+        if err:
+            context_span.tag('error.message', str(err))
+            context_span.annotate(traceback.format_exc())
 
 
 class TelegramHandler(object):
@@ -94,17 +108,22 @@ class Telegram(Component):
             except Exception as err:
                 self.app.log_err(err)
 
-    async def send_message(self, context_span, chat_id, text, **options):
+    async def send_message(self, context_span, chat_id, text,
+                           tracer_config: Optional[
+                               TelegramTracerConfig] = None,
+                           **options) -> None:
         await self.api_call(context_span, "sendMessage",
-                            chat_id=chat_id, text=text, **options)
+                            chat_id=chat_id, text=text,
+                            tracer_config=tracer_config, **options)
 
-    async def api_call(self, context_span: Span, method, **params):
+    async def api_call(self, context_span: Span, method,
+                       tracer_config: Optional[TelegramTracerConfig] = None,
+                       **params):
         self._active_calls += 1
         try:
             span = None
             if context_span:
                 span = context_span.new_child()
-                span.start()
             try:
                 if span:
                     span.name('telegram:%s' % method)
@@ -115,16 +134,21 @@ class Telegram(Component):
                     if 'chat_id' in params:
                         span.tag('telegram:chat_id', params.get('chat_id'))
                     span.annotate(json_encode(params))
-                await self.bot.api_call(method, **params)
+                    span.start()
+                    if tracer_config:
+                        tracer_config.on_api_call_start(span, method, params)
+                res = await self.bot.api_call(method, **params)
+                if span:
+                    if tracer_config:
+                        tracer_config.on_api_call_end(span, None, res)
+                    span.finish()
             except Exception as err:
                 if span:
-                    span.tag('error.message', str(err))
-                    span.annotate(traceback.format_exc())
+                    if tracer_config:
+                        tracer_config.on_api_call_end(span, err, None)
                     span.finish(exception=err)
                 raise
-            finally:
-                if span:
-                    span.finish()
+
         finally:
             self._active_calls -= 1
             if self._stopping and self._active_calls == 0:
@@ -240,11 +264,15 @@ class TelegramChat:
         self.message: dict = chat.message
         self.type: str = chat.type
 
-    async def send_text(self, context_span, text, **options):
+    async def send_text(self, context_span, text,
+                        tracer_config: Optional[TelegramTracerConfig] = None,
+                        **options):
         await self._bot.send_message(context_span, self.id, text,
+                                     tracer_config=tracer_config,
                                      **options)
 
-    async def reply(self, context_span, text, markup=None, parse_mode=None):
+    async def reply(self, context_span, text, markup=None, parse_mode=None,
+                    tracer_config: Optional[TelegramTracerConfig] = None):
         if markup is None:
             markup = {}
 
@@ -254,5 +282,6 @@ class TelegramChat:
             reply_to_message_id=self._chat.message["message_id"],
             disable_web_page_preview='true',
             reply_markup=self._chat.bot.json_serialize(markup),
-            parse_mode=parse_mode
+            parse_mode=parse_mode,
+            tracer_config=tracer_config
         )
