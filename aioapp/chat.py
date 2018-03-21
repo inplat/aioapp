@@ -127,10 +127,10 @@ class Telegram(Component):
             try:
                 if span:
                     span.name('telegram:%s' % method)
-                    span.tag(SPAN_TYPE, SPAN_TYPE_TELEGRAM)
-                    span.tag(SPAN_KIND, SPAN_KIND_TELEGRAM_OUT)
+                    span.tag(SPAN_TYPE, SPAN_TYPE_TELEGRAM, True)
+                    span.tag(SPAN_KIND, SPAN_KIND_TELEGRAM_OUT, True)
                     span.kind(CLIENT)
-                    span.tag('telegram.method', method)
+                    span.tag('telegram.method', method, True)
                     if 'chat_id' in params:
                         span.tag('telegram:chat_id', params.get('chat_id'))
                     span.annotate(json_encode(params))
@@ -196,8 +196,8 @@ class Telegram(Component):
                     if span:
                         span.name('telegram:in')
                         span.kind(SERVER)
-                        span.tag(SPAN_TYPE, SPAN_TYPE_TELEGRAM)
-                        span.tag(SPAN_KIND, SPAN_KIND_TELEGRAM_IN)
+                        span.tag(SPAN_TYPE, SPAN_TYPE_TELEGRAM, True)
+                        span.tag(SPAN_KIND, SPAN_KIND_TELEGRAM_IN, True)
                         span.tag('telegram:date',
                                  chat.message.get('date'))
                         span.tag('telegram:message_id',

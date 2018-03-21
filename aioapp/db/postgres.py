@@ -169,8 +169,8 @@ class ConnectionContextManager:
             if span:
                 span.kind(CLIENT)
                 span.name("db:Acquire")
-                span.tag(SPAN_TYPE, SPAN_TYPE_POSTGRES)
-                span.tag(SPAN_KIND, SPAN_KIND_POSTRGES_ACQUIRE)
+                span.tag(SPAN_TYPE, SPAN_TYPE_POSTGRES, True)
+                span.tag(SPAN_KIND, SPAN_KIND_POSTRGES_ACQUIRE, True)
                 span.remote_endpoint("postgres")
                 span.start()
                 if self._tracer_config:
@@ -247,8 +247,8 @@ class Connection:
             if span:
                 span.kind(CLIENT)
                 span.name("db:%s" % id)
-                span.tag(SPAN_TYPE, SPAN_TYPE_POSTGRES)
-                span.tag(SPAN_KIND, SPAN_KIND_POSTRGES_QUERY)
+                span.tag(SPAN_TYPE, SPAN_TYPE_POSTGRES, True)
+                span.tag(SPAN_KIND, SPAN_KIND_POSTRGES_QUERY, True)
                 span.remote_endpoint("postgres")
                 span.annotate(repr(args))
                 span.start()
@@ -281,8 +281,8 @@ class Connection:
             if span:
                 span.kind(CLIENT)
                 span.name("db:%s" % id)
-                span.tag(SPAN_TYPE, SPAN_TYPE_POSTGRES)
-                span.tag(SPAN_KIND, SPAN_KIND_POSTRGES_QUERY)
+                span.tag(SPAN_TYPE, SPAN_TYPE_POSTGRES, True)
+                span.tag(SPAN_KIND, SPAN_KIND_POSTRGES_QUERY, True)
                 span.remote_endpoint("postgres")
                 span.annotate(repr(args))
                 span.start()
@@ -313,8 +313,8 @@ class Connection:
             if span:
                 span.kind(CLIENT)
                 span.name("db:%s" % id)
-                span.tag(SPAN_TYPE, SPAN_TYPE_POSTGRES)
-                span.tag(SPAN_KIND, SPAN_KIND_POSTRGES_QUERY)
+                span.tag(SPAN_TYPE, SPAN_TYPE_POSTGRES, True)
+                span.tag(SPAN_KIND, SPAN_KIND_POSTRGES_QUERY, True)
                 span.remote_endpoint("postgres")
                 span.annotate(repr(args))
                 span.start()

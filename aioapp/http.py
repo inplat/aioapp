@@ -42,7 +42,7 @@ class HttpClientTracerConfig:
                        result: Optional[ClientResponse],
                        response_body: Optional[bytes]) -> None:
         if result:
-            context_span.tag(HTTP_STATUS_CODE, result.status)
+            context_span.tag(HTTP_STATUS_CODE, result.status, True)
         if response_body is not None:
             context_span.tag(HTTP_RESPONSE_SIZE, str(len(response_body)))
 
@@ -98,14 +98,14 @@ class Server(Component):
                                                  request.path)
                     span.name(span_name)
                     span.kind(SERVER)
-                    span.tag(SPAN_TYPE, SPAN_TYPE_HTTP)
-                    span.tag(SPAN_KIND, SPAN_KIND_HTTP_IN)
+                    span.tag(SPAN_TYPE, SPAN_TYPE_HTTP, True)
+                    span.tag(SPAN_KIND, SPAN_KIND_HTTP_IN, True)
                     span.tag(HTTP_PATH, request.path)
-                    span.tag(HTTP_METHOD, request.method.upper())
+                    span.tag(HTTP_METHOD, request.method.upper(), True)
                     _annotate_bytes(span, await request.read())
                     resp, trace_str = await self._error_handle(span, request,
                                                                handler)
-                    span.tag(HTTP_STATUS_CODE, resp.status)
+                    span.tag(HTTP_STATUS_CODE, resp.status, True)
                     _annotate_bytes(span, resp.body)
                     if trace_str is not None:
                         span.annotate(trace_str)
@@ -125,7 +125,7 @@ class Server(Component):
             trace = traceback.format_exc()
 
             if span is not None:
-                span.tag('error', 'true')
+                span.tag('error', 'true', True)
                 span.tag('error.message', str(herr))
                 span.annotate(trace)
 
@@ -239,10 +239,10 @@ class Client(Component):
 
                 if span:
                     span.kind(CLIENT)
-                    span.tag(SPAN_TYPE, SPAN_TYPE_HTTP)
-                    span.tag(SPAN_KIND, SPAN_KIND_HTTP_OUT)
-                    span.tag(HTTP_METHOD, "POST")
-                    span.tag(HTTP_HOST, parsed.netloc)
+                    span.tag(SPAN_TYPE, SPAN_TYPE_HTTP, True)
+                    span.tag(SPAN_KIND, SPAN_KIND_HTTP_OUT, True)
+                    span.tag(HTTP_METHOD, "POST", True)
+                    span.tag(HTTP_HOST, parsed.netloc, True)
                     span.tag(HTTP_PATH, parsed.path)
                     if data:
                         span.tag(HTTP_REQUEST_SIZE, str(len(data)))

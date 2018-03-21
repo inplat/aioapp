@@ -77,6 +77,7 @@ class Span:
         self._name: Optional[str] = None
         self._kind: Optional[str] = None
         self._tags: dict = {}
+        self._tags_metrics: dict = {}
         self._annotations: list = []
         self._remote_endpoint: tuple = None
         self._start_stamp: Optional[int] = None
@@ -133,7 +134,7 @@ class Span:
         now = time.time()
         self._finish_stamp = int((ts or now) * 1000000)
         if exception is not None:
-            self.tag('error', str(exception))
+            self.tag('error', 'true', True)
             self.tag('error.message', str(exception))
         if self._span and self.tracer.tracer_driver == DRIVER_ZIPKIN:
             span: azs.Span = self._span
@@ -142,8 +143,10 @@ class Span:
             self.metrics.send(self)
         return self
 
-    def tag(self, key: str, value: str) -> 'Span':
+    def tag(self, key: str, value: str, metrics: bool = False) -> 'Span':
         self._tags[key] = str(value)
+        if metrics:
+            self._tags_metrics[key] = self._tags[key]
         if self._span and self.tracer.tracer_driver == DRIVER_ZIPKIN:
             span: azs.Span = self._span
             span.tag(key, value)
@@ -332,14 +335,14 @@ class InfluxMetrics:
 
     def send(self, span: Span):
         if self.transport:
-            if SPAN_TYPE in span._tags:
-                name = self._escape_name(span._tags.pop(SPAN_TYPE))
+            if SPAN_TYPE in span._tags_metrics:
+                name = self._escape_name(span._tags_metrics.pop(SPAN_TYPE))
             else:
                 name = self._escape_name(span._name)
             if self.name:
                 name = self.name + name
             tags = []
-            for key, value in span._tags.items():
+            for key, value in span._tags_metrics.items():
                 tag = '%s=%s' % (self._escape_name(key),
                                  self._escape_name(value))
                 tags.append(tag)
