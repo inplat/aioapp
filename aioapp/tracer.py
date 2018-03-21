@@ -64,7 +64,8 @@ class Span:
                  trace_id: str, id: Optional[str] = None,
                  parent_id: Optional[str] = None,
                  sampled: Optional[bool] = None, debug: bool = False,
-                 shared: bool = False) -> None:
+                 shared: bool = False,
+                 skip: bool = False) -> None:
         self.tracer = tracer
         self.metrics = metrics
         self.trace_id = trace_id
@@ -81,9 +82,13 @@ class Span:
         self._start_stamp: Optional[int] = None
         self._finish_stamp: Optional[int] = None
         self._span: Any = None
+        self._skip = skip
 
         if self.tracer.tracer_driver == DRIVER_ZIPKIN:
             self._span = self.get_zipkin_span()
+
+    def skip(self):
+        self._skip = True
 
     def make_headers(self):
         headers = {
@@ -105,7 +110,8 @@ class Span:
             id=azu.generate_random_64bit_string(),
             parent_id=self.id,
             sampled=self.sampled,
-            debug=self.debug
+            debug=self.debug,
+            skip=self._skip
         )
         if name is not None:
             span.name(name)
@@ -132,7 +138,7 @@ class Span:
         if self._span and self.tracer.tracer_driver == DRIVER_ZIPKIN:
             span: azs.Span = self._span
             span.finish(ts=now, exception=exception)
-        if self.metrics:
+        if self.metrics and not self._skip:
             self.metrics.send(self)
         return self
 
@@ -189,7 +195,7 @@ class Span:
                 trace_id=self.trace_id,
                 parent_id=self.parent_id,
                 span_id=self.id,
-                sampled=self.sampled,
+                sampled=self.sampled if not self._skip else False,
                 debug=self.debug,
                 shared=self.shared
 
@@ -210,7 +216,8 @@ class Tracer:
         self.default_debug: Optional[bool] = None
 
     def new_trace(self, sampled: Optional[bool] = None,
-                  debug: Optional[bool] = None):
+                  debug: Optional[bool] = None,
+                  skip: bool = False):
         if sampled is None:
             sampled = self.default_sampled
         if debug is None:
@@ -222,10 +229,11 @@ class Tracer:
             trace_id=azu.generate_random_128bit_string(),
             id=azu.generate_random_64bit_string(),
             sampled=sampled,
-            debug=debug)
+            debug=debug,
+            skip=skip)
         return span
 
-    def new_trace_from_headers(self, headers: dict):
+    def new_trace_from_headers(self, headers: dict, skip: bool = False):
         headers = {k.lower(): v for k, v in headers.items()}
 
         sampled = azh.parse_sampled(headers)
@@ -257,6 +265,7 @@ class Tracer:
             sampled=sampled,
             shared=False,
             debug=debug,
+            skip=skip
         )
 
         return span
