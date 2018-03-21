@@ -33,7 +33,7 @@ def pytest_addoption(parser):
     parser.addoption("--metrics-addr", dest="metrics_addr",
                      help="Use this metrics collector instead of emulator if "
                           "specified",
-                     metavar="host:port")
+                     metavar="scheme://host:port")
     parser.addoption("--postgres-addr", dest="postgres_addr",
                      help="Use this postgres instead of docker image "
                           "if specified",
