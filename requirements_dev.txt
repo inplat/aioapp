@@ -20,7 +20,7 @@ wheel==0.30.0
 tox==2.9.1
 
 async-generator==1.9
-async_timeout==2.0.0
+async_timeout==2.0.1
 cryptography==2.1.4
 PyYAML==3.12
 
