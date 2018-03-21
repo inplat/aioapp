@@ -92,8 +92,8 @@ class Channel:
                 'amqp:publish {} {}'.format(exchange_name, routing_key),
                 CLIENT
             )
-            context_span.tag(SPAN_TYPE, SPAN_TYPE_AMQP, True)
-            context_span.tag(SPAN_KIND, SPAN_KIND_AMQP_OUT, True)
+            span.tag(SPAN_TYPE, SPAN_TYPE_AMQP, True)
+            span.tag(SPAN_KIND, SPAN_KIND_AMQP_OUT, True)
             if propagate_trace:
                 headers = context_span.make_headers()
                 properties = properties or {}
