@@ -3,7 +3,7 @@
 """Top-level package for aioapp."""
 
 __author__ = """Konstantin Stepanov"""
-__version__ = '0.0.1b16'
+__version__ = '0.0.1b17'
 
 from . import app, db, http, error, chat, amqp
 
