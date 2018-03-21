@@ -1,6 +1,6 @@
 import json
 import traceback
-from typing import Union, Dict, List, Any
+from typing import Union, Dict, List, Any, Optional
 import asyncio
 import asyncpg
 import asyncpg.protocol
@@ -12,6 +12,28 @@ from ..tracer import (Span, CLIENT, SPAN_TYPE, SPAN_KIND, SPAN_TYPE_POSTGRES,
                       SPAN_KIND_POSTRGES_ACQUIRE, SPAN_KIND_POSTRGES_QUERY)
 
 JsonType = Union[None, int, float, str, bool, List[Any], Dict[str, Any]]
+
+
+class PostgresTracerConfig:
+
+    def on_acquire_start(self, context_span: 'Span') -> None:
+        pass
+
+    def on_acquire_end(self, context_span: 'Span',
+                       err: Optional[Exception]) -> None:
+        if err:
+            context_span.tag('error.message', str(err))
+            context_span.annotate(traceback.format_exc())
+
+    def on_query_start(self, context_span: 'Span', id: str, query: str,
+                       args: tuple, timeout: Optional[float]) -> None:
+        pass
+
+    def on_query_end(self, context_span: 'Span',
+                     err: Optional[Exception], result) -> None:
+        if err:
+            context_span.tag('error.message', str(err))
+            context_span.annotate(traceback.format_exc())
 
 
 class Postgres(Component):
@@ -100,10 +122,12 @@ class Postgres(Component):
             await self.pool.close()
 
     def connection(self, context_span: Span,
-                   acquire_timeout=None
+                   acquire_timeout=None,
+                   tracer_config: Optional[PostgresTracerConfig] = None
                    ) -> 'ConnectionContextManager':
         return ConnectionContextManager(self, context_span,
-                                        acquire_timeout=acquire_timeout)
+                                        acquire_timeout=acquire_timeout,
+                                        tracer_config=tracer_config)
 
     async def query_one(self, context_span: Span, id: str, query: str,
                         *args: Any, timeout: float = None
@@ -128,17 +152,18 @@ class Postgres(Component):
 
 class ConnectionContextManager:
     def __init__(self, db: Postgres, context_span: Span,
-                 acquire_timeout: float = None) -> None:
+                 acquire_timeout: float = None,
+                 tracer_config: Optional[PostgresTracerConfig] = None) -> None:
         self._db = db
         self._conn = None
         self._context_span = context_span
         self._acquire_timeout = acquire_timeout
+        self._tracer_config = tracer_config
 
     async def __aenter__(self) -> 'Connection':
         span = None
         if self._context_span:
             span = self._context_span.new_child()
-            span.start()
         try:
             if span:
                 span.kind(CLIENT)
@@ -146,17 +171,21 @@ class ConnectionContextManager:
                 span.tag(SPAN_TYPE, SPAN_TYPE_POSTGRES)
                 span.tag(SPAN_KIND, SPAN_KIND_POSTRGES_ACQUIRE)
                 span.remote_endpoint("postgres")
+                span.start()
+                if self._tracer_config:
+                    self._tracer_config.on_acquire_start(span)
             self._conn = await self._db._pool.acquire(
                 timeout=self._acquire_timeout)
+            if span:
+                if self._tracer_config:
+                    self._tracer_config.on_acquire_end(span, None)
+                    span.finish()
         except Exception as err:
             if span:
-                span.tag('error.message', str(err))
-                span.annotate(traceback.format_exc())
+                if self._tracer_config:
+                    self._tracer_config.on_acquire_end(span, err)
                 span.finish(exception=err)
             raise
-        finally:
-            if span:
-                span.finish()
         c = Connection(self._db, self._conn)
         return c
 
@@ -206,11 +235,12 @@ class Connection:
         return TransactionContextManager(context_span, self, isolation_level)
 
     async def execute(self, context_span: Span, id: str,
-                      query: str, *args: Any, timeout: float = None) -> str:
+                      query: str, *args: Any, timeout: float = None,
+                      tracer_config: Optional[PostgresTracerConfig] = None) -> str:
         span = None
         if context_span:
             span = context_span.new_child()
-            span.start()
+
         try:
             if span:
                 span.kind(CLIENT)
@@ -219,25 +249,32 @@ class Connection:
                 span.tag(SPAN_KIND, SPAN_KIND_POSTRGES_QUERY)
                 span.remote_endpoint("postgres")
                 span.annotate(repr(args))
+                span.start()
+                if tracer_config:
+                    tracer_config.on_query_start(span, id, query, args,
+                                                 timeout)
             res = await self._conn.execute(query, *args, timeout=timeout)
+            if span:
+                if tracer_config:
+                    tracer_config.on_query_end(span, None, res)
+                span.finish()
         except Exception as err:
             if span:
-                span.tag('error.message', str(err))
-                span.annotate(traceback.format_exc())
+                if tracer_config:
+                    tracer_config.on_query_end(span, err, None)
                 span.finish(exception=err)
             raise
-        finally:
-            if span:
-                span.finish()
+
         return res
 
     async def query_one(self, context_span: Span, id: str,
                         query: str, *args: Any,
-                        timeout: float = None) -> asyncpg.protocol.Record:
+                        timeout: float = None,
+                        tracer_config: Optional[PostgresTracerConfig] = None
+                        ) -> asyncpg.protocol.Record:
         span = None
         if context_span:
             span = context_span.new_child()
-            span.start()
         try:
             if span:
                 span.kind(CLIENT)
@@ -246,25 +283,30 @@ class Connection:
                 span.tag(SPAN_KIND, SPAN_KIND_POSTRGES_QUERY)
                 span.remote_endpoint("postgres")
                 span.annotate(repr(args))
+                span.start()
+                if tracer_config:
+                    tracer_config.on_query_start(span, id, query, args,
+                                                 timeout)
             res = await self._conn.fetchrow(query, *args, timeout=timeout)
+            if span:
+                if tracer_config:
+                    tracer_config.on_query_end(span, None, res)
+                span.finish()
         except Exception as err:
             if span:
-                span.tag('error.message', str(err))
-                span.annotate(traceback.format_exc())
+                if tracer_config:
+                    tracer_config.on_query_end(span, err, None)
                 span.finish(exception=err)
             raise
-        finally:
-            if span:
-                span.finish()
         return res
 
     async def query_all(self, context_span: Span, id: str,
-                        query: str, *args: Any, timeout: float = None
+                        query: str, *args: Any, timeout: float = None,
+                        tracer_config: Optional[PostgresTracerConfig] = None
                         ) -> List[asyncpg.protocol.Record]:
         span = None
         if context_span:
             span = context_span.new_child()
-            span.start()
         try:
             if span:
                 span.kind(CLIENT)
@@ -273,14 +315,19 @@ class Connection:
                 span.tag(SPAN_KIND, SPAN_KIND_POSTRGES_QUERY)
                 span.remote_endpoint("postgres")
                 span.annotate(repr(args))
+                span.start()
+                if tracer_config:
+                    tracer_config.on_query_start(span, id, query, args,
+                                                 timeout)
             res = await self._conn.fetch(query, *args, timeout=timeout)
+            if span:
+                if tracer_config:
+                    tracer_config.on_query_end(span, None, res)
+                span.finish()
         except Exception as err:
             if span:
-                span.tag('error.message', str(err))
-                span.annotate(traceback.format_exc())
+                if tracer_config:
+                    tracer_config.on_query_end(span, err, None)
                 span.finish(exception=err)
             raise
-        finally:
-            if span:
-                span.finish()
         return res

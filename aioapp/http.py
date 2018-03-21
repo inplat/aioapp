@@ -32,10 +32,23 @@ class Handler(object):
         return self.server.app
 
 
-class ResponseCodec:
-    async def decode(self, context_span: Span,
-                     response: ClientResponse) -> Any:
-        raise NotImplementedError()
+class HttpClientTracerConfig:
+
+    def on_request_start(self, context_span: 'Span',
+                         session: ClientSession) -> None:
+        pass
+
+    def on_request_end(self, context_span: 'Span', err: Optional[Exception],
+                       result: Optional[ClientResponse],
+                       response_body: Optional[bytes]) -> None:
+        if result:
+            context_span.tag(HTTP_STATUS_CODE, result.status)
+        if response_body is not None:
+            context_span.tag(HTTP_RESPONSE_SIZE, str(len(response_body)))
+
+        if err:
+            context_span.finish(exception=err)
+            context_span.tag('error.message', str(err))
 
 
 class Server(Component):
@@ -206,8 +219,7 @@ class Client(Component):
                       read_timeout: Optional[float] = None,
                       conn_timeout: Optional[float] = None,
                       ssl_ctx: Optional[ssl.SSLContext] = None,
-                      span_params: Optional[dict] = None,
-                      response_codec: Optional[ResponseCodec] = None,
+                      tracer_config: Optional[HttpClientTracerConfig] = None,
                       **kwargs
                       ) -> ClientResponse:
         conn = TCPConnector(ssl_context=ssl_ctx, loop=self.loop)
@@ -217,7 +229,6 @@ class Client(Component):
         if context_span:
             headers.update(context_span.make_headers())
             span = context_span.new_child()
-            span.start()
         try:
             async with ClientSession(loop=self.loop,
                                      headers=headers,
@@ -227,17 +238,6 @@ class Client(Component):
                 parsed = urlparse(url)
 
                 if span:
-                    if span_params and 'name' in span_params:
-                        span.name(span_params['name'])
-                    else:
-                        span.name('client {0} {1}'.format('POST', parsed.path))
-                    if span_params and 'endpoint_name' in span_params:
-                        span.remote_endpoint(span_params['endpoint_name'])
-                    else:
-                        span.remote_endpoint(parsed.netloc)
-                    if span_params and 'tags' in span_params:
-                        for tag_name, tag_val in span_params['tags'].items():
-                            span.tag(tag_name, tag_val)
                     span.kind(CLIENT)
                     span.tag(SPAN_TYPE, SPAN_TYPE_HTTP)
                     span.tag(SPAN_KIND, SPAN_KIND_HTTP_OUT)
@@ -249,34 +249,27 @@ class Client(Component):
                     else:
                         span.tag(HTTP_REQUEST_SIZE, '0')
                     span.tag(HTTP_URL, url)
-                    if (span_params and 'annotate_request' in span_params and
-                            span_params['annotate_request']):
-                        _annotate_bytes(span, data)
+                    span.start()
+                    if tracer_config:
+                        tracer_config.on_request_start(span, session)
 
                 resp = await session._request(method, url, data=data,
                                               **kwargs)
                 response_body = await resp.read()
                 resp.release()
                 if span:
-                    if (span_params and 'annotate_response' in span_params and
-                            span_params['annotate_request']):
-                        _annotate_bytes(span, data)
-                    span.tag(HTTP_STATUS_CODE, resp.status)
-                    span.tag(HTTP_RESPONSE_SIZE,
-                             str(len(response_body)))
-                if response_codec:
-                    dec = await response_codec.decode(span, resp)
-                    return dec
-                else:
-                    return resp
+                    if tracer_config:
+                        tracer_config.on_request_end(span, None, resp,
+                                                     response_body)
+                    span.finish()
+                return resp
         except Exception as err:
             if span:
-                span.finish(exception=err)
-                span.tag('error.message', str(err))
-            raise
-        finally:
-            if span:
+                if tracer_config:
+                    tracer_config.on_request_end(span, err, None, None)
                 span.finish()
+
+            raise
 
     async def get(self, context_span: Span,
                   url: str,
@@ -284,13 +277,12 @@ class Client(Component):
                   read_timeout: Optional[float] = None,
                   conn_timeout: Optional[float] = None,
                   ssl_ctx: Optional[ssl.SSLContext] = None,
-                  span_params: Optional[dict] = None,
-                  response_codec: Optional[ResponseCodec] = None,
+                  tracer_config: Optional[HttpClientTracerConfig] = None,
                   **kwargs
                   ) -> ClientResponse:
         return await self.request(context_span, hdrs.METH_GET, url, None,
                                   headers, read_timeout, conn_timeout, ssl_ctx,
-                                  span_params, response_codec, **kwargs)
+                                  tracer_config, **kwargs)
 
     async def post(self, context_span: Span,
                    url: str,
@@ -299,13 +291,12 @@ class Client(Component):
                    read_timeout: Optional[float] = None,
                    conn_timeout: Optional[float] = None,
                    ssl_ctx: Optional[ssl.SSLContext] = None,
-                   span_params: Optional[dict] = None,
-                   response_codec: Optional[ResponseCodec] = None,
+                   tracer_config: Optional[HttpClientTracerConfig] = None,
                    **kwargs
                    ) -> ClientResponse:
         return await self.request(context_span, hdrs.METH_POST, url, data,
                                   headers, read_timeout, conn_timeout, ssl_ctx,
-                                  span_params, response_codec, **kwargs)
+                                  tracer_config, **kwargs)
 
 
 def _annotate_bytes(span, data):
