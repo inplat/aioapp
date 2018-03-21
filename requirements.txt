@@ -3,4 +3,4 @@ aiohttp==3.0.1
 aiozipkin==0.1.1
 asyncpg==0.15.0
 aiotg==0.9.7
-aioredis==1.0.0
+aioredis==1.1.0
