@@ -190,7 +190,7 @@ class ConnectionContextManager:
             if span:
                 if self._tracer_config:
                     self._tracer_config.on_acquire_end(span, None)
-                    span.finish()
+                span.finish()
         except Exception as err:
             if span:
                 if self._tracer_config:
