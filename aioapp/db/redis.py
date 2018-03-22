@@ -88,9 +88,12 @@ class Redis(Component):
         return ConnectionContextManager(self, context_span, tracer_config)
 
     async def execute(self, context_span: Span, id: str,
-                      command: str, *args):
-        async with self.connection(context_span) as conn:
-            return await conn.execute(context_span, id, command, *args)
+                      command: str, *args,
+                      tracer_config: Optional[RedisTracerConfig] = None):
+        async with self.connection(context_span,
+                                   tracer_config=tracer_config) as conn:
+            return await conn.execute(context_span, id, command, *args,
+                                      tracer_config=tracer_config)
 
 
 class ConnectionContextManager:

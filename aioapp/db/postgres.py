@@ -131,24 +131,34 @@ class Postgres(Component):
                                         tracer_config=tracer_config)
 
     async def query_one(self, context_span: Span, id: str, query: str,
-                        *args: Any, timeout: float = None
+                        *args: Any, timeout: float = None,
+                        tracer_config: Optional[PostgresTracerConfig] = None
                         ) -> asyncpg.protocol.Record:
-        async with self.connection(context_span) as conn:
+        async with self.connection(context_span,
+                                   tracer_config=tracer_config) as conn:
             return await conn.query_one(context_span, id, query, *args,
-                                        timeout=timeout)
+                                        timeout=timeout,
+                                        tracer_config=tracer_config)
 
     async def query_all(self, context_span: Span, id: str, query: str,
-                        *args: Any, timeout: float = None
+                        *args: Any, timeout: float = None,
+                        tracer_config: Optional[PostgresTracerConfig] = None
                         ) -> List[asyncpg.protocol.Record]:
-        async with self.connection(context_span) as conn:
+        async with self.connection(context_span,
+                                   tracer_config=tracer_config) as conn:
             return await conn.query_all(context_span, id, query, *args,
-                                        timeout=timeout)
+                                        timeout=timeout,
+                                        tracer_config=tracer_config)
 
     async def execute(self, context_span: Span, id: str, query: str,
-                      *args: Any, timeout: float = None) -> str:
-        async with self.connection(context_span) as conn:
+                      *args: Any, timeout: float = None,
+                      tracer_config: Optional[PostgresTracerConfig] = None
+                      ) -> str:
+        async with self.connection(context_span,
+                                   tracer_config=tracer_config) as conn:
             return await conn.execute(context_span, id, query, *args,
-                                      timeout=timeout)
+                                      timeout=timeout,
+                                      tracer_config=tracer_config)
 
 
 class ConnectionContextManager:
