@@ -208,10 +208,12 @@ class ConnectionContextManager:
 
 class TransactionContextManager:
     def __init__(self, context_span: Span, conn: 'Connection',
-                 isolation_level: str = None) -> None:
+                 isolation_level: str = None,
+                 tracer_config: Optional[PostgresTracerConfig] = None) -> None:
         self._conn = conn
         self._isolation_level = isolation_level
         self._context_span = context_span
+        self._tracer_config = tracer_config
 
     def _begin_query(self) -> str:
         query = "BEGIN TRANSACTION"
@@ -222,16 +224,19 @@ class TransactionContextManager:
     async def __aenter__(self) -> None:
         await self._conn.execute(self._context_span,
                                  query=self._begin_query(),
-                                 id="BeginTransaction")
+                                 id="BeginTransaction",
+                                 tracer_config=self._tracer_config)
 
     async def __aexit__(self, exc_type: type, exc: BaseException,
                         tb: type) -> bool:
         if exc:
             await self._conn.execute(self._context_span,
-                                     query="ROLLBACK", id="Rollback")
+                                     query="ROLLBACK", id="Rollback",
+                                     tracer_config=self._tracer_config)
         else:
             await self._conn.execute(self._context_span,
-                                     query="COMMIT", id="Commit")
+                                     query="COMMIT", id="Commit",
+                                     tracer_config=self._tracer_config)
         return False
 
 
@@ -242,8 +247,11 @@ class Connection:
         self._conn = conn
 
     def xact(self, context_span: Span,
-             isolation_level: str = None) -> 'TransactionContextManager':
-        return TransactionContextManager(context_span, self, isolation_level)
+             isolation_level: str = None,
+             tracer_config: Optional[PostgresTracerConfig] = None
+             ) -> 'TransactionContextManager':
+        return TransactionContextManager(context_span, self, isolation_level,
+                                         tracer_config)
 
     async def execute(self, context_span: Span, id: str,
                       query: str, *args: Any, timeout: float = None,
