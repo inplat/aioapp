@@ -241,7 +241,7 @@ class Client(Component):
                     span.kind(CLIENT)
                     span.metrics_tag(SPAN_TYPE, SPAN_TYPE_HTTP)
                     span.metrics_tag(SPAN_KIND, SPAN_KIND_HTTP_OUT)
-                    span.tag(HTTP_METHOD, "POST", True)
+                    span.tag(HTTP_METHOD, method, True)
                     span.tag(HTTP_HOST, parsed.netloc, True)
                     span.tag(HTTP_PATH, parsed.path)
                     if data:
