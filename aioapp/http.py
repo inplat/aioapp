@@ -98,8 +98,8 @@ class Server(Component):
                                                  request.path)
                     span.name(span_name)
                     span.kind(SERVER)
-                    span.tag(SPAN_TYPE, SPAN_TYPE_HTTP, True)
-                    span.tag(SPAN_KIND, SPAN_KIND_HTTP_IN, True)
+                    span.metrics_tag(SPAN_TYPE, SPAN_TYPE_HTTP)
+                    span.metrics_tag(SPAN_KIND, SPAN_KIND_HTTP_IN)
                     span.tag(HTTP_PATH, request.path)
                     span.tag(HTTP_METHOD, request.method.upper(), True)
                     _annotate_bytes(span, await request.read())
@@ -239,8 +239,8 @@ class Client(Component):
 
                 if span:
                     span.kind(CLIENT)
-                    span.tag(SPAN_TYPE, SPAN_TYPE_HTTP, True)
-                    span.tag(SPAN_KIND, SPAN_KIND_HTTP_OUT, True)
+                    span.metrics_tag(SPAN_TYPE, SPAN_TYPE_HTTP)
+                    span.metrics_tag(SPAN_KIND, SPAN_KIND_HTTP_OUT)
                     span.tag(HTTP_METHOD, "POST", True)
                     span.tag(HTTP_HOST, parsed.netloc, True)
                     span.tag(HTTP_PATH, parsed.path)

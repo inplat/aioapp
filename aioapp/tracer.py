@@ -159,6 +159,10 @@ class Span:
             self._tags_metrics[key] = self._tags[key]
         return self
 
+    def metrics_tag(self, key: str, value: str) -> 'Span':
+        self._tags_metrics[key] = str(value)
+        return self
+
     def annotate(self, value: str, ts: Optional[float] = None) -> 'Span':
         self._annotations.append((value, int((ts or time.time()) * 1000000)))
         return self

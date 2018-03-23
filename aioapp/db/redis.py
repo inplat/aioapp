@@ -112,8 +112,8 @@ class ConnectionContextManager:
             if span:
                 span.kind(CLIENT)
                 span.name("redis:Acquire")
-                span.tag(SPAN_TYPE, SPAN_TYPE_REDIS, True)
-                span.tag(SPAN_KIND, SPAN_KIND_REDIS_ACQUIRE, True)
+                span.metrics_tag(SPAN_TYPE, SPAN_TYPE_REDIS)
+                span.metrics_tag(SPAN_KIND, SPAN_KIND_REDIS_ACQUIRE)
                 span.remote_endpoint("redis")
                 span.tag('redis.size_before', self._redis.pool.size)
                 span.tag('redis.free_before', self._redis.pool.freesize)
@@ -161,8 +161,8 @@ class Connection:
             if span:
                 span.kind(CLIENT)
                 span.name("redis:%s" % id)
-                span.tag(SPAN_TYPE, SPAN_TYPE_REDIS, True)
-                span.tag(SPAN_KIND, SPAN_KIND_REDIS_QUERY, True)
+                span.metrics_tag(SPAN_TYPE, SPAN_TYPE_REDIS)
+                span.metrics_tag(SPAN_KIND, SPAN_KIND_REDIS_QUERY)
                 span.remote_endpoint("redis")
                 span.tag("redis.command", command)
                 span.annotate(repr(args))
@@ -195,8 +195,8 @@ class Connection:
             if span:
                 span.kind(CLIENT)
                 span.name("redis:%s" % id)
-                span.tag(SPAN_TYPE, SPAN_TYPE_REDIS, True)
-                span.tag(SPAN_KIND, SPAN_KIND_REDIS_PUBSUB, True)
+                span.metrics_tag(SPAN_TYPE, SPAN_TYPE_REDIS)
+                span.metrics_tag(SPAN_KIND, SPAN_KIND_REDIS_PUBSUB)
                 span.remote_endpoint("redis")
                 span.tag("redis.pubsub", command)
                 span.annotate(repr(channels_or_patterns))

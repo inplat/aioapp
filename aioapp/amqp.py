@@ -92,8 +92,8 @@ class Channel:
                 'amqp:publish {} {}'.format(exchange_name, routing_key),
                 CLIENT
             )
-            span.tag(SPAN_TYPE, SPAN_TYPE_AMQP, True)
-            span.tag(SPAN_KIND, SPAN_KIND_AMQP_OUT, True)
+            span.metrics_tag(SPAN_TYPE, SPAN_TYPE_AMQP)
+            span.metrics_tag(SPAN_KIND, SPAN_KIND_AMQP_OUT)
             if propagate_trace:
                 headers = context_span.make_headers()
                 properties = properties or {}
@@ -156,12 +156,12 @@ class Channel:
         if context_span:
             tracer_config = tracer_config or AmqpTracerConfig()
             span = context_span.new_child('amqp:ack', CLIENT)
-            span.tag(SPAN_TYPE, SPAN_TYPE_AMQP, True)
+            span.metrics_tag(SPAN_TYPE, SPAN_TYPE_AMQP)
             span.start()
         try:
             if is_ack:
                 if span:
-                    span.tag(SPAN_KIND, SPAN_KIND_AMQP_ACK, True)
+                    span.metrics_tag(SPAN_KIND, SPAN_KIND_AMQP_ACK)
                     tracer_config.on_ack_start(span, self.channel,
                                                delivery_tag, multiple)
                 await self.channel.basic_client_ack(delivery_tag=delivery_tag,
@@ -169,7 +169,7 @@ class Channel:
                 if span:
                     tracer_config.on_ack_end(span, self.channel, None)
             else:
-                span.tag(SPAN_KIND, SPAN_KIND_AMQP_NACK, True)
+                span.metrics_tag(SPAN_KIND, SPAN_KIND_AMQP_NACK)
                 if span:
                     tracer_config.on_nack_start(span, self.channel,
                                                 delivery_tag, multiple)
@@ -220,8 +220,8 @@ class Channel:
                 span = self.amqp.app.tracer.new_trace_from_headers(
                     properties.headers)
                 span.name('amqp:message')
-                span.tag(SPAN_TYPE, SPAN_TYPE_AMQP, True)
-                span.tag(SPAN_KIND, SPAN_KIND_AMQP_IN, True)
+                span.metrics_tag(SPAN_TYPE, SPAN_TYPE_AMQP)
+                span.metrics_tag(SPAN_KIND, SPAN_KIND_AMQP_IN)
                 span.kind(SERVER)
                 if envelope.routing_key is not None:
                     span.tag('amqp.routing_key', envelope.routing_key)
