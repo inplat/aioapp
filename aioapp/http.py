@@ -105,8 +105,9 @@ class Server(Component):
                     _annotate_bytes(span, await request.read())
                     resp, trace_str = await self._error_handle(span, request,
                                                                handler)
-                    span.tag(HTTP_STATUS_CODE, resp.status, True)
-                    _annotate_bytes(span, resp.body)
+                    if isinstance(resp, web.Response):
+                        span.tag(HTTP_STATUS_CODE, resp.status, True)
+                        _annotate_bytes(span, resp.body)
                     if trace_str is not None:
                         span.annotate(trace_str)
                     return resp
