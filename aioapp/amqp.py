@@ -206,17 +206,9 @@ class Channel:
             return
 
         self._cons_cnt += 1
+        span = None
         try:
-            span = None
             if self.amqp.app.tracer:
-                # context = az.make_context(properties.headers)
-                # if context is None:
-                #     sampled = azah.parse_sampled(properties.headers)
-                #     debug = azah.parse_debug(properties.headers)
-                #     span = self.amqp.app.tracer.new_trace(sampled=sampled,
-                #                                           debug=debug)
-                # else:
-                #     span = self.amqp.app.tracer.join_span(context)
                 span = self.amqp.app.tracer.new_trace_from_headers(
                     properties.headers)
                 span.name('amqp:message')
@@ -233,18 +225,18 @@ class Channel:
                 if properties.expiration is not None:
                     span.tag('amqp.expiration', properties.expiration)
                 span.start()
-            try:
-                await callback(span, channel, body, envelope, properties)
 
-                if span:
-                    span.finish()
-            except Exception as err:
-                if span:
-                    span.tag('error.message', str(err))
-                    span.annotate(traceback.format_exc())
-                    span.finish(exception=err)
-                self.amqp.app.log_err(err)
-                raise
+            await callback(span, channel, body, envelope, properties)
+
+            if span:
+                span.finish()
+        except Exception as err:
+            if span:
+                span.tag('error.message', str(err))
+                span.annotate(traceback.format_exc())
+                span.finish(exception=err)
+            self.amqp.app.log_err(err)
+            raise
 
         finally:
             self._cons_cnt -= 1

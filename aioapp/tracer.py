@@ -236,7 +236,10 @@ class Tracer:
         return span
 
     def new_trace_from_headers(self, headers: dict, skip: bool = False):
-        headers = {k.lower(): v for k, v in headers.items()}
+        if headers:
+            headers = {k.lower(): v for k, v in headers.items()}
+        else:
+            headers = {}
 
         sampled = azh.parse_sampled(headers)
         if sampled is None:
