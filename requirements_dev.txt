@@ -1,7 +1,7 @@
 -r requirements.txt
 
 flake8==3.5.0
-mypy==0.580
+mypy==0.590
 bandit==1.4.0
 
 pytest==3.4.2
