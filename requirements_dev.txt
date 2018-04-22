@@ -11,7 +11,7 @@ pytest-cov==2.5.1
 coverage==4.5.1
 docker==3.2.1
 
-Sphinx==1.7.2
+Sphinx==1.7.3
 sphinx-rtd-theme==0.3.0
 watchdog==0.8.3
 
