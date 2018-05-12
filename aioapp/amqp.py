@@ -85,7 +85,7 @@ class Channel:
                       properties: Optional[dict] = None,
                       mandatory: bool = False, immediate: bool = False,
                       tracer_config: Optional[AmqpTracerConfig] = None,
-                      propagate_trace: bool = True):
+                      propagate_trace: bool = True, retry: bool=True):
         span = None
         if context_span:
             span = context_span.new_child(
@@ -107,11 +107,23 @@ class Channel:
                                                properties, mandatory,
                                                immediate)
         try:
-            await self.channel.basic_publish(payload, exchange_name,
-                                             routing_key,
-                                             properties=properties,
-                                             mandatory=mandatory,
-                                             immediate=immediate)
+            try:
+                await self.channel.basic_publish(payload, exchange_name,
+                                                 routing_key,
+                                                 properties=properties,
+                                                 mandatory=mandatory,
+                                                 immediate=immediate)
+            except Exception as e:
+                span.tag('error', 'true')
+                span.tag('error.message', str(e))
+                span.annotate(traceback.format_exc())
+                await self.open()
+                if retry:
+                    await self.publish(context_span, payload, exchange_name,
+                                       routing_key, properties, mandatory,
+                                       immediate, tracer_config,
+                                       propagate_trace, retry=False)
+
             if span:
                 if tracer_config:
                     tracer_config.on_publish_end(span, self.channel, None)
@@ -136,6 +148,7 @@ class Channel:
             no_local=no_local, no_ack=no_ack, exclusive=exclusive,
             no_wait=no_wait, arguments=arguments)
         self._cons_tag = res['consumer_tag']
+        return res
 
     async def ack(self, context_span: Span, delivery_tag: str,
                   multiple: bool = False,
@@ -337,6 +350,7 @@ class Amqp(Component):
         return mask_url_pwd(self.url)
 
     async def prepare(self) -> None:
+        self._connecting = True
         for i in range(self.connect_max_attempts):
             try:
                 await self._connect()
@@ -365,6 +379,7 @@ class Amqp(Component):
                                                   on_error=self._con_error,
                                                   heartbeat=self.heartbeat)
         self.app.log_info("Connected to %s" % self._masked_url)
+        self._connecting = False
 
         if self._started:
             await self._start_channels()
@@ -374,6 +389,9 @@ class Amqp(Component):
             self.app.log_err(error)
         if self._shutting_down or not self._started:
             return
+        if self._connecting:
+            return
+        self._connecting = True
 
         async_call(self.loop, self._reconnect,
                    delay=self.connect_retry_delay)
