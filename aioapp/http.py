@@ -170,7 +170,7 @@ class Server(Component):
         self.app.log_info("Preparing to start http server")
         self._runner = web_runner.AppRunner(
             self.web_app,
-            handle_signals=True,
+            handle_signals=False,
             access_log_class=self.access_log_class,
             access_log_format=self.access_log_format,
             access_log=self.access_log)

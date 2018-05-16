@@ -53,7 +53,7 @@ if __name__ == '__main__':
     app.add(
         'amqp',
         amqp.Amqp(
-            url='amqp://naf-1:2RwX7LEHVx@localhost:10901/',
+            url='amqp://guest:guest@localhost:10901/',
             channels=[
                 PubChannel(),
                 SubChannel()
