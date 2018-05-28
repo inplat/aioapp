@@ -34,5 +34,6 @@ Features
 
 * Graceful Shutdown
 * Zipkin tracing all external communications
+* self healthcheck
 
 
