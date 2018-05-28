@@ -1,4 +1,4 @@
-from typing import Optional, Any
+from typing import Optional, Any, Callable
 from yarl import URL
 import time
 import re
@@ -153,6 +153,12 @@ class Span:
 
         if self.metrics and not self._skip:
             self.metrics.send(self)
+
+        if self.tracer is not None and self.tracer.on_span_finish is not None:
+            call = self.tracer.on_span_finish(self)
+            if asyncio.iscoroutine(call):
+                asyncio.ensure_future(call, loop=self.tracer.loop)
+
         return self
 
     def tag(self, key: str, value: str, metrics: bool = False) -> 'Span':
@@ -206,6 +212,14 @@ class Span:
             ))
         return span
 
+    def __str__(self):
+        if self._start_stamp is not None and self._finish_stamp is not None:
+            duration = (' in %s ms' % (
+                (self._finish_stamp - self._start_stamp) / 1000., ))
+        else:
+            duration = ''
+        return 'AioappSpan: %s%s' % (self._name, duration)
+
 
 class Tracer:
 
@@ -218,6 +232,7 @@ class Tracer:
         self.tracer_driver: Optional[str] = None
         self.default_sampled: Optional[bool] = None
         self.default_debug: Optional[bool] = None
+        self.on_span_finish: Optional[Callable] = None
 
     def new_trace(self, sampled: Optional[bool] = None,
                   debug: Optional[bool] = None,

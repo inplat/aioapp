@@ -3,7 +3,7 @@ import logging
 import asyncio
 from aiohttp import web, web_request
 from aioapp.app import Application
-from aioapp import http, db, chat, amqp
+from aioapp import http, db, chat, amqp, tracer
 
 
 class HttpHandler(http.Handler):
@@ -19,19 +19,19 @@ class HttpHandler(http.Handler):
             return error
         return web.Response(body='Internal Error: ' + str(error), status=500)
 
-    async def home_handler(self, ctx,
+    async def home_handler(self, ctx: tracer.Span,
                            request: web_request.Request) -> web.Response:
-        with ctx.tracer.new_child(ctx.context) as span:
+        with ctx.new_child() as span:
             span.name('test:sleep')
-            with span.tracer.new_child(ctx.context) as span2:
+            with span.new_child() as span2:
                 span2.name('test2:sleep')
                 await asyncio.sleep(.1, loop=self.app.loop)
 
         await self.app.db.query_one(ctx,
                                     'postgres:test', 'SELECT $1::int as a',
                                     123)
-        await self.app.tg.send_message(ctx,
-                                       1825135, request.url)
+        # await self.app.tg.send_message(ctx,
+        #                                1825135, request.url)
 
         await self.app.redis.execute(ctx, 'redis:set',
                                      'SET', 'key', 1)
@@ -64,6 +64,10 @@ class TelegramHandler(chat.TelegramHandler):
         await chat.reply(ctx, match.group(1))
 
 
+async def span_finish(span: tracer.Span):
+    print('span finish:', span)
+
+
 if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)
 
@@ -88,7 +92,7 @@ if __name__ == '__main__':
     app.add(
         'db',
         db.Postgres(
-            url='postgres://user:passwd@localhost:15432/db',
+            url='postgres://postgres@localhost:19801/postgres',
             pool_min_size=2,
             pool_max_size=19,
             pool_max_queries=50000,
@@ -102,7 +106,7 @@ if __name__ == '__main__':
     app.add(
         'redis',
         db.Redis(
-            url='redis://localhost:6381/0?encoding=utf-8',
+            url='redis://localhost:19802/0?encoding=utf-8',
             pool_min_size=2,
             pool_max_size=4,
             connect_max_attempts=10,
@@ -110,20 +114,21 @@ if __name__ == '__main__':
         )
     )
 
-    app.add(
-        'tg',
-        chat.Telegram(
-            api_token=telegram_api_token,
-            handler=TelegramHandler,
-            connect_max_attempts=10,
-            connect_retry_delay=1,
-        )
-    )
+    # Fucking RKN
+    # app.add(
+    #     'tg',
+    #     chat.Telegram(
+    #         api_token=telegram_api_token,
+    #         handler=TelegramHandler,
+    #         connect_max_attempts=10,
+    #         connect_retry_delay=1,
+    #     )
+    # )
 
     app.add(
         'amqp',
         amqp.Amqp(
-            url='amqp://guest:guest@localhost:56721/',
+            url='amqp://guest:guest@localhost:19803/',
         )
     )
 
@@ -133,9 +138,10 @@ if __name__ == '__main__':
         tracer_name='test-svc',
         tracer_sample_rate=1.0,
         tracer_send_inteval=3,
-        metrics_driver='statsd',
-        metrics_addr='localhost:8125',
-        metrics_name='test_svc_'
+        metrics_driver='telegraf-influx',
+        metrics_addr='udp://localhost:8125',
+        metrics_name='test_svc_',
+        on_span_finish=span_finish
     )
 
     app.run()

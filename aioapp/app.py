@@ -1,7 +1,7 @@
 import asyncio
 import signal
 import logging
-from typing import Dict, Optional
+from typing import Dict, Optional, Callable
 from .error import PrepareError, GracefulExit
 from .tracer import Tracer, Span
 
@@ -87,7 +87,8 @@ class Application(object):
                       tracer_default_sampled: Optional[bool] = None,
                       tracer_default_debug: Optional[bool] = None,
                       metrics_driver=None, metrics_addr=None,
-                      metrics_name=None):
+                      metrics_name=None,
+                      on_span_finish: Optional[Callable]=None):
         if tracer_driver:
             self.tracer.setup_tracer(tracer_driver, tracer_name, tracer_addr,
                                      tracer_sample_rate, tracer_send_inteval,
@@ -96,6 +97,7 @@ class Application(object):
         if metrics_driver:
             self.tracer.setup_metrics(metrics_driver, metrics_addr,
                                       metrics_name)
+        self.tracer.on_span_finish = on_span_finish
 
     async def _shutdown_tracer(self):
         if self.tracer:
