@@ -1,3 +1,4 @@
+import asyncio
 from typing import Tuple
 from aioapp.app import Application
 from aioapp.db import Postgres, Redis
@@ -7,6 +8,7 @@ import pytest
 import string
 from aioapp.misc import rndstr
 from aioapp.tracer import Span
+from aioapp.misc import async_call
 
 
 async def _start_postgres(app: Application, url: str,
@@ -149,3 +151,89 @@ async def test_redis_prepare_failure(app, unused_tcp_port):
         await _start_redis(app,
                            'redis://%s:%s/1' % ('127.0.0.1', unused_tcp_port),
                            connect_max_attempts=2, connect_retry_delay=0.001)
+
+
+async def test_postgres_health_bad(app: Application, unused_tcp_port: int,
+                                loop: asyncio.AbstractEventLoop) -> None:
+    url = 'postgres://postgres@%s:%s/postgres' % ('127.0.0.1', unused_tcp_port)
+
+    db = Postgres(url)
+    app.add('postgres', db)
+
+    async def start():
+        await app.run_prepare()
+        await db.start()
+
+    res = async_call(loop, start)
+    await asyncio.sleep(1)
+
+    result = await app.health()
+    assert 'postgres' in result
+    assert result['postgres'] is not None
+    assert isinstance(result['postgres'], BaseException)
+
+    if res['fut'] is not None:
+        res['fut'].cancel()
+
+
+async def test_postgres_health_ok(app: Application, postgres: str,
+                               loop: asyncio.AbstractEventLoop) -> None:
+    db = Postgres(postgres)
+    app.add('postgres', db)
+
+    async def start():
+        await app.run_prepare()
+        await db.start()
+
+    res = async_call(loop, start)
+    await asyncio.sleep(1)
+
+    result = await app.health()
+    assert 'postgres' in result
+    assert result['postgres'] is None
+
+    if res['fut'] is not None:
+        res['fut'].cancel()
+
+
+async def test_redis_health_bad(app: Application, unused_tcp_port: int,
+                                loop: asyncio.AbstractEventLoop) -> None:
+    url = 'redis://%s:%s/1' % ('127.0.0.1', unused_tcp_port)
+
+    db = Redis(url)
+    app.add('redis', db)
+
+    async def start():
+        await app.run_prepare()
+        await db.start()
+
+    res = async_call(loop, start)
+    await asyncio.sleep(1)
+
+    result = await app.health()
+    assert 'redis' in result
+    assert result['redis'] is not None
+    assert isinstance(result['redis'], BaseException)
+
+    if res['fut'] is not None:
+        res['fut'].cancel()
+
+
+async def test_redis_health_ok(app: Application, redis: str,
+                               loop: asyncio.AbstractEventLoop) -> None:
+    db = Redis(redis)
+    app.add('redis', db)
+
+    async def start():
+        await app.run_prepare()
+        await db.start()
+
+    res = async_call(loop, start)
+    await asyncio.sleep(1)
+
+    result = await app.health()
+    assert 'redis' in result
+    assert result['redis'] is None
+
+    if res['fut'] is not None:
+        res['fut'].cancel()

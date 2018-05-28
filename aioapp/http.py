@@ -198,6 +198,15 @@ class Server(Component):
         if self._runner:
             await self._runner.cleanup()
 
+    async def health(self, ctx_span: Span):
+
+        coro = asyncio.open_connection(host=self.host, port=self.port,
+                                       loop=self.loop)
+        with ctx_span.new_child("tcp:connect", CLIENT) as span:
+            span.tag('tcp.host', self.host)
+            span.tag('tcp.port', str(self.port))
+            await asyncio.wait_for(coro, timeout=10, loop=self.loop)
+
 
 class Client(Component):
     # TODO make pool of clients
@@ -298,6 +307,9 @@ class Client(Component):
         return await self.request(context_span, hdrs.METH_POST, url, data,
                                   headers, read_timeout, conn_timeout, ssl_ctx,
                                   tracer_config, **kwargs)
+
+    async def health(self, ctx_span: Span):
+        pass
 
 
 def _annotate_bytes(span, data):

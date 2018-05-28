@@ -2,6 +2,8 @@ import asyncio
 from aioapp.chat import Telegram, TelegramHandler
 from aiotg import Bot
 from aioapp.error import PrepareError
+from aioapp.app import Application
+from aioapp.misc import async_call
 import pytest
 
 
@@ -99,7 +101,7 @@ async def test_telegram(app, loop):
                               })
 
 
-async def test_postgres_prepare_failure(app, unused_tcp_port):
+async def test_telegram_prepare_failure(app, unused_tcp_port):
     class Handler(TelegramHandler):
         pass
 
@@ -112,3 +114,52 @@ async def test_postgres_prepare_failure(app, unused_tcp_port):
         )
         app.add('tg', tg)
         await app.run_prepare()
+
+
+async def test_telegram_health_bad(app: Application,
+                                   loop: asyncio.AbstractEventLoop) -> None:
+    tg = Telegram(
+        api_token='error',
+        handler=TelegramHandler,
+        bot_class=MockBot
+    )
+    app.add('tg', tg)
+
+    async def start():
+        await app.run_prepare()
+        await tg.start()
+
+    res = async_call(loop, start)
+    await asyncio.sleep(1)
+
+    result = await app.health()
+    assert 'tg' in result
+    assert result['tg'] is not None
+    assert isinstance(result['tg'], BaseException)
+
+    if res['fut'] is not None:
+        res['fut'].cancel()
+
+
+async def test_telegram_health_ok(app: Application,
+                                  loop: asyncio.AbstractEventLoop) -> None:
+    tg = Telegram(
+        api_token='1',
+        handler=TelegramHandler,
+        bot_class=MockBot
+    )
+    app.add('tg', tg)
+
+    async def start():
+        await app.run_prepare()
+        await tg.start()
+
+    res = async_call(loop, start)
+    await asyncio.sleep(1)
+
+    result = await app.health()
+    assert 'tg' in result
+    assert result['tg'] is None
+
+    if res['fut'] is not None:
+        res['fut'].cancel()

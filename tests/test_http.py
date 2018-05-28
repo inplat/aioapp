@@ -1,6 +1,9 @@
+import asyncio
 import pytest
 from aiohttp import web
 from aioapp.http import Server, Client, Handler
+from aioapp.app import Application
+from aioapp.misc import async_call
 import aiozipkin.span as azs
 
 
@@ -118,3 +121,34 @@ async def test_server_error_handler_fail(app, unused_tcp_port):
                                  'http://127.0.0.1:%d/' % unused_tcp_port)
     assert resp.status == 500
     assert await resp.text() == ''
+
+
+async def test_http_health_bad(app: Application, unused_tcp_port: int,
+                               loop: asyncio.AbstractEventLoop) -> None:
+    http = Server('127.0.0.1', unused_tcp_port, Handler)
+    app.add('http', http)
+
+    result = await app.health()
+    assert 'http' in result
+    assert result['http'] is not None
+    assert isinstance(result['http'], BaseException)
+
+
+async def test_http_health_ok(app: Application, unused_tcp_port: int,
+                              loop: asyncio.AbstractEventLoop) -> None:
+    http = Server('127.0.0.1', unused_tcp_port, Handler)
+    app.add('http', http)
+
+    async def start():
+        await app.run_prepare()
+        await http.start()
+
+    res = async_call(loop, start)
+    await asyncio.sleep(1)
+
+    result = await app.health()
+    assert 'http' in result
+    assert result['http'] is None
+
+    if res['fut'] is not None:
+        res['fut'].cancel()

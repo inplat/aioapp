@@ -85,7 +85,7 @@ class Channel:
                       properties: Optional[dict] = None,
                       mandatory: bool = False, immediate: bool = False,
                       tracer_config: Optional[AmqpTracerConfig] = None,
-                      propagate_trace: bool = True, retry: bool=True):
+                      propagate_trace: bool = True, retry: bool = True):
         span = None
         if context_span:
             span = context_span.new_child(
@@ -432,3 +432,7 @@ class Amqp(Component):
                 if ch.name is not None and ch.name == name:
                     return ch
         return None
+
+    async def health(self, ctx_span: Span):
+        channel = await self._protocol.channel()
+        await channel.close()

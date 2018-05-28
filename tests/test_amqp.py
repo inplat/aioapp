@@ -8,6 +8,7 @@ import aioamqp.properties
 from aioapp.app import Application
 from aioapp.error import PrepareError
 from aioapp.amqp import Amqp, Channel
+from aioapp.misc import async_call
 import aiozipkin.span as azs
 import aiozipkin.aiohttp_helpers as azah
 
@@ -138,3 +139,45 @@ async def test_amqp_prepare_failure(app, unused_tcp_port):
                           connect_max_attempts=2,
                           connect_retry_delay=0.001
                           )
+
+async def test_amqp_health_bad(app: Application, unused_tcp_port: int,
+                                loop: asyncio.AbstractEventLoop) -> None:
+    url = 'amqp://guest:guest@%s:%s/' % ('127.0.0.1', unused_tcp_port)
+
+    amqp = Amqp(url)
+    app.add('amqp', amqp)
+
+    async def start():
+        await app.run_prepare()
+        await amqp.start()
+
+    res = async_call(loop, start)
+    await asyncio.sleep(1)
+
+    result = await app.health()
+    assert 'amqp' in result
+    assert result['amqp'] is not None
+    assert isinstance(result['amqp'], BaseException)
+
+    if res['fut'] is not None:
+        res['fut'].cancel()
+
+
+async def test_amqp_health_ok(app: Application, rabbitmq: str,
+                               loop: asyncio.AbstractEventLoop) -> None:
+    amqp = Amqp(rabbitmq)
+    app.add('amqp', amqp)
+
+    async def start():
+        await app.run_prepare()
+        await amqp.start()
+
+    res = async_call(loop, start)
+    await asyncio.sleep(1)
+
+    result = await app.health()
+    assert 'amqp' in result
+    assert result['amqp'] is None
+
+    if res['fut'] is not None:
+        res['fut'].cancel()

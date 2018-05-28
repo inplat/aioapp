@@ -161,8 +161,8 @@ class Postgres(Component):
                                       tracer_config=tracer_config)
 
     async def health(self, ctx_span: Span):
-        with self.connection(ctx_span) as conn:
-            await conn.execute('SELECT 1')
+        async with self.connection(ctx_span) as conn:
+            await conn.execute(ctx_span, 'test', 'SELECT 1')
 
 
 class ConnectionContextManager:

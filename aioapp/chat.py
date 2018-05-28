@@ -108,6 +108,9 @@ class Telegram(Component):
             except Exception as err:
                 self.app.log_err(err)
 
+    async def health(self, ctx_span: Span):
+        await self.bot.get_me()
+
     async def send_message(self, context_span, chat_id, text,
                            tracer_config: Optional[
                                TelegramTracerConfig] = None,

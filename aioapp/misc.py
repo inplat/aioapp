@@ -25,17 +25,21 @@ def async_call(loop, func, *args, delay=None, **kwargs):
     :type kwargs:
     :return:
     """
+    res = {'fut': None}
     if isinstance(delay, datetime.timedelta):
         delay = delay.total_seconds()
 
     def _call(func, *args, **kwargs):
-        ensure_future(func(*args, **kwargs), loop=loop)
+        fut = ensure_future(func(*args, **kwargs), loop=loop)
+        res['fut'] = fut
 
     if delay:
         print(delay)
         loop.call_later(delay, partial(_call, func, *args, **kwargs))
     else:
         loop.call_soon(partial(_call, func, *args, **kwargs))
+
+    return res
 
 
 def mask_url_pwd(route: Optional[str]) -> Optional[str]:

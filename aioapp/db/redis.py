@@ -95,6 +95,9 @@ class Redis(Component):
             return await conn.execute(context_span, id, command, *args,
                                       tracer_config=tracer_config)
 
+    async def health(self, ctx_span: Span):
+        await self.execute(ctx_span, 'test', 'GET', 'somekey')
+
 
 class ConnectionContextManager:
     def __init__(self, redis, context_span,
