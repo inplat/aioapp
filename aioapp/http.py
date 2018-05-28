@@ -31,6 +31,9 @@ class Handler(object):
     def app(self):
         return self.server.app
 
+    async def prepare(self) -> None:
+        pass
+
 
 class HttpClientTracerConfig:
 
@@ -185,6 +188,7 @@ class Server(Component):
             backlog=self.backlog,
             reuse_address=self.reuse_address,
             reuse_port=self.reuse_port))
+        await self.handler.prepare()
 
     async def start(self):
         self.app.log_info("Starting http server")
