@@ -1,4 +1,5 @@
 import tempfile
+from collections import OrderedDict
 import pytest
 from aioapp.config import Config, Val, ConfigError
 
@@ -8,8 +9,12 @@ def test_config():
 
     class CustomVal(Val):
 
-        def __call__(self, compare) -> bool:
-            return self.value == compare
+        def __init__(self, name, value, compare):
+            super().__init__(name, value)
+            self.compare = compare
+
+        def __call__(self) -> bool:
+            return self.value == self.compare
 
     class Conf(Config):
         db_dsn: str
@@ -277,3 +282,77 @@ def test_config_invalid_config():
 
     with pytest.raises(Exception, match='.*Invalid configuration settings.*'):
         Conf({'SOME_VAR': 'test'})
+
+
+def test_config_as_markdown():
+    class Conf(Config):
+        _vars = OrderedDict((
+            (
+                'str_var',
+                {
+                    'type': str,
+                    'name': 'STR_VAR',
+                    'default': 'some text',
+                    'min': 1,
+                    'max': 255,
+                }),
+            (
+                'int_var',
+                {
+                    'type': int,
+                    'name': 'INT_VAR',
+                    'min': 10,
+                    'max': 20,
+                }),
+            (
+                'float_var',
+                {
+                    'type': float,
+                    'name': 'FLOAT_VAR',
+                    'min': 10,
+                    'max': 20,
+                }),
+            (
+                'bool_var',
+                {
+                    'type': bool,
+                    'name': 'BOOL_VAR',
+                }),
+            (
+                'file_var',
+                {
+                    'type': 'file',
+                    'name': 'FILE_VAR',
+                }),
+            (
+                'dir_var',
+                {
+                    'type': 'dir',
+                    'name': 'DIR_VAR',
+                }),
+        ))
+
+    result = '''\
+* STR_VAR: string
+  default: some text
+  min length: 1
+  max length: 255
+
+* INT_VAR: integer
+  min value: 10
+  max value: 20
+
+* FLOAT_VAR: float
+  min value: 10
+  max value: 20
+
+* BOOL_VAR: boolean
+
+* FILE_VAR: string(path to file)
+  assess mode: r
+  encoding: UTF-8
+
+* DIR_VAR: string(path to dir)
+'''
+
+    assert result == Conf.as_markdown()
