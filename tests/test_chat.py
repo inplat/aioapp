@@ -63,13 +63,13 @@ async def test_telegram(app, loop):
             self.bot.add_command('/start', self.start)
             self.bot.set_default(self.default)
 
-        async def start(self, context_span, chat, match):
+        async def start(self, ctx, chat, match):
             self.app.tg_last_event = 'start'
-            await chat.send_text(context_span, 'ok')
+            await chat.send_text(ctx, 'ok')
 
-        async def default(self, context_span, chat, message):
+        async def default(self, ctx, chat, message):
             self.app.tg_last_event = message['text']
-            await chat.reply(context_span, message['text'])
+            await chat.reply(ctx, message['text'])
 
     tg = Telegram(
         api_token='1',

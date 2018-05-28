@@ -18,7 +18,7 @@ from .tracer import (Span, CLIENT, SERVER, HTTP_PATH, HTTP_METHOD, HTTP_HOST,
                      SPAN_KIND_HTTP_IN, SPAN_KIND_HTTP_OUT)
 
 access_logger = logging.getLogger('aiohttp.access')
-SPAN_KEY = 'context_span'
+SPAN_KEY = 'ctx'
 
 
 class Handler(object):
@@ -34,21 +34,21 @@ class Handler(object):
 
 class HttpClientTracerConfig:
 
-    def on_request_start(self, context_span: 'Span',
+    def on_request_start(self, ctx: 'Span',
                          session: ClientSession) -> None:
         pass
 
-    def on_request_end(self, context_span: 'Span', err: Optional[Exception],
+    def on_request_end(self, ctx: 'Span', err: Optional[Exception],
                        result: Optional[ClientResponse],
                        response_body: Optional[bytes]) -> None:
         if result:
-            context_span.tag(HTTP_STATUS_CODE, result.status, True)
+            ctx.tag(HTTP_STATUS_CODE, result.status, True)
         if response_body is not None:
-            context_span.tag(HTTP_RESPONSE_SIZE, str(len(response_body)))
+            ctx.tag(HTTP_RESPONSE_SIZE, str(len(response_body)))
 
         if err:
-            context_span.finish(exception=err)
-            context_span.tag('error.message', str(err))
+            ctx.finish(exception=err)
+            ctx.tag('error.message', str(err))
 
 
 class Server(Component):
@@ -198,11 +198,11 @@ class Server(Component):
         if self._runner:
             await self._runner.cleanup()
 
-    async def health(self, ctx_span: Span):
+    async def health(self, ctx: Span):
 
         coro = asyncio.open_connection(host=self.host, port=self.port,
                                        loop=self.loop)
-        with ctx_span.new_child("tcp:connect", CLIENT) as span:
+        with ctx.new_child("tcp:connect", CLIENT) as span:
             span.tag('tcp.host', self.host)
             span.tag('tcp.port', str(self.port))
             await asyncio.wait_for(coro, timeout=10, loop=self.loop)
@@ -221,7 +221,7 @@ class Client(Component):
         pass
 
     async def request(self,
-                      context_span: Optional[Span],
+                      ctx: Optional[Span],
                       method: str,
                       url: str,
                       data: Any = None,
@@ -236,9 +236,9 @@ class Client(Component):
         headers = headers or {}
         # TODO optional propagate tracing headers
         span = None
-        if context_span:
-            headers.update(context_span.make_headers())
-            span = context_span.new_child()
+        if ctx:
+            headers.update(ctx.make_headers())
+            span = ctx.new_child()
         try:
             async with ClientSession(loop=self.loop,
                                      headers=headers,
@@ -281,7 +281,7 @@ class Client(Component):
 
             raise
 
-    async def get(self, context_span: Span,
+    async def get(self, ctx: Span,
                   url: str,
                   headers: Optional[dict] = None,
                   read_timeout: Optional[float] = None,
@@ -290,11 +290,11 @@ class Client(Component):
                   tracer_config: Optional[HttpClientTracerConfig] = None,
                   **kwargs
                   ) -> ClientResponse:
-        return await self.request(context_span, hdrs.METH_GET, url, None,
+        return await self.request(ctx, hdrs.METH_GET, url, None,
                                   headers, read_timeout, conn_timeout, ssl_ctx,
                                   tracer_config, **kwargs)
 
-    async def post(self, context_span: Span,
+    async def post(self, ctx: Span,
                    url: str,
                    data: Any = None,
                    headers: Optional[dict] = None,
@@ -304,11 +304,11 @@ class Client(Component):
                    tracer_config: Optional[HttpClientTracerConfig] = None,
                    **kwargs
                    ) -> ClientResponse:
-        return await self.request(context_span, hdrs.METH_POST, url, data,
+        return await self.request(ctx, hdrs.METH_POST, url, data,
                                   headers, read_timeout, conn_timeout, ssl_ctx,
                                   tracer_config, **kwargs)
 
-    async def health(self, ctx_span: Span):
+    async def health(self, ctx: Span):
         pass
 
 

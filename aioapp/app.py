@@ -27,7 +27,7 @@ class Component(object):
     async def stop(self) -> None:
         raise NotImplementedError()
 
-    async def health(self, ctx_span: Span) -> None:
+    async def health(self, ctx: Span) -> None:
         """
         Raises exception if not healthy
         :raises: Exception

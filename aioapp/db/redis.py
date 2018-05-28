@@ -11,34 +11,34 @@ from ..tracer import (Span, CLIENT, SPAN_TYPE, SPAN_KIND, SPAN_TYPE_REDIS,
 
 class RedisTracerConfig:
 
-    def on_acquire_start(self, context_span: 'Span') -> None:
+    def on_acquire_start(self, ctx: 'Span') -> None:
         pass
 
-    def on_acquire_end(self, context_span: 'Span',
+    def on_acquire_end(self, ctx: 'Span',
                        err: Optional[Exception]) -> None:
         if err:
-            context_span.tag('error.message', str(err))
-            context_span.annotate(traceback.format_exc())
+            ctx.tag('error.message', str(err))
+            ctx.annotate(traceback.format_exc())
 
-    def on_query_start(self, context_span: 'Span', id: str,
+    def on_query_start(self, ctx: 'Span', id: str,
                        command: str) -> None:
         pass
 
-    def on_query_end(self, context_span: 'Span',
+    def on_query_end(self, ctx: 'Span',
                      err: Optional[Exception], result) -> None:
         if err:
-            context_span.tag('error.message', str(err))
-            context_span.annotate(traceback.format_exc())
+            ctx.tag('error.message', str(err))
+            ctx.annotate(traceback.format_exc())
 
-    def on_pubsub_start(self, context_span: 'Span', id: str, command: str,
+    def on_pubsub_start(self, ctx: 'Span', id: str, command: str,
                         channels_or_patterns) -> None:
         pass
 
-    def on_pubsub_end(self, context_span: 'Span',
+    def on_pubsub_end(self, ctx: 'Span',
                       err: Optional[Exception], result) -> None:
         if err:
-            context_span.tag('error.message', str(err))
-            context_span.annotate(traceback.format_exc())
+            ctx.tag('error.message', str(err))
+            ctx.annotate(traceback.format_exc())
 
 
 class Redis(Component):
@@ -82,35 +82,35 @@ class Redis(Component):
             await self.pool.wait_closed()
 
     def connection(self,
-                   context_span: Span,
+                   ctx: Span,
                    tracer_config: Optional[RedisTracerConfig] = None
                    ) -> 'ConnectionContextManager':
-        return ConnectionContextManager(self, context_span, tracer_config)
+        return ConnectionContextManager(self, ctx, tracer_config)
 
-    async def execute(self, context_span: Span, id: str,
+    async def execute(self, ctx: Span, id: str,
                       command: str, *args,
                       tracer_config: Optional[RedisTracerConfig] = None):
-        async with self.connection(context_span,
+        async with self.connection(ctx,
                                    tracer_config=tracer_config) as conn:
-            return await conn.execute(context_span, id, command, *args,
+            return await conn.execute(ctx, id, command, *args,
                                       tracer_config=tracer_config)
 
-    async def health(self, ctx_span: Span):
-        await self.execute(ctx_span, 'test', 'GET', 'somekey')
+    async def health(self, ctx: Span):
+        await self.execute(ctx, 'test', 'GET', 'somekey')
 
 
 class ConnectionContextManager:
-    def __init__(self, redis, context_span,
+    def __init__(self, redis, ctx,
                  tracer_config: Optional[RedisTracerConfig] = None) -> None:
         self._redis = redis
         self._conn = None
-        self._context_span = context_span
+        self._ctx = ctx
         self._tracer_config = tracer_config
 
     async def __aenter__(self) -> 'Connection':
         span = None
-        if self._context_span:
-            span = self._context_span.new_child()
+        if self._ctx:
+            span = self._ctx.new_child()
         try:
             if span:
                 span.kind(CLIENT)
@@ -154,12 +154,12 @@ class Connection:
     def pubsub_channels(self):
         return self._conn.pubsub_channels
 
-    async def execute(self, context_span: Span, id: str,
+    async def execute(self, ctx: Span, id: str,
                       command: str, *args,
                       tracer_config: Optional[RedisTracerConfig] = None):
         span = None
-        if context_span:
-            span = context_span.new_child()
+        if ctx:
+            span = ctx.new_child()
         try:
             if span:
                 span.kind(CLIENT)
@@ -186,14 +186,14 @@ class Connection:
 
         return res
 
-    async def execute_pubsub(self, context_span: Span, id: str,
+    async def execute_pubsub(self, ctx: Span, id: str,
                              command,
                              *channels_or_patterns,
                              tracer_config: Optional[
                                  RedisTracerConfig] = None):
         span = None
-        if context_span:
-            span = context_span.new_child()
+        if ctx:
+            span = ctx.new_child()
         try:
             if span:
                 span.kind(CLIENT)

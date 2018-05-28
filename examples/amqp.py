@@ -31,15 +31,15 @@ class SubChannel(amqp.Channel):
         await self.consume(self.msg, self.queue)
         await self.publish(None, b'msg', '', self.queue)
 
-    async def msg(self, ctx_span: Span,
+    async def msg(self, ctx: Span,
                   channel: aioamqp.channel.Channel,
                   body: bytes,
                   envelope: aioamqp.envelope.Envelope,
                   properties: aioamqp.properties.Properties) -> None:
-        await self.ack(ctx_span, envelope.delivery_tag)
+        await self.ack(ctx, envelope.delivery_tag)
         print('MESSAGE', body)
         await asyncio.sleep(1)
-        await self.amqp.channel('pub').publish(ctx_span, b'123', '',
+        await self.amqp.channel('pub').publish(ctx, b'123', '',
                                                self.queue)
 
 

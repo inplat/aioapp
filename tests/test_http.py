@@ -31,10 +31,10 @@ async def test_server(app, unused_tcp_port):
             self.server.add_route('GET', '/ok', self.ok_handler)
             self.server.add_route('GET', '/fb', self.fb_handler)
 
-        async def ok_handler(self, context_span, request):
+        async def ok_handler(self, ctx, request):
             return web.Response(status=200, text=self.app.my_param)
 
-        async def fb_handler(self, context_span, request):
+        async def fb_handler(self, ctx, request):
             raise web.HTTPForbidden()
 
     server = Server(
@@ -75,7 +75,7 @@ async def test_server_error_handler(app, unused_tcp_port):
             super(TestHandler, self).__init__(server)
             self.server.set_error_handler(self.err_handler)
 
-        async def err_handler(self, context_span, request, error):
+        async def err_handler(self, ctx, request, error):
             return web.Response(status=401, text='Error is ' + str(error))
 
     server = Server(
@@ -102,7 +102,7 @@ async def test_server_error_handler_fail(app, unused_tcp_port):
             super(TestHandler, self).__init__(server)
             self.server.set_error_handler(self.err_handler)
 
-        async def err_handler(self, context_span, request, error):
+        async def err_handler(self, ctx, request, error):
             raise Warning()
 
     server = Server(

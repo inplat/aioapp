@@ -16,24 +16,24 @@ JsonType = Union[None, int, float, str, bool, List[Any], Dict[str, Any]]
 
 class PostgresTracerConfig:
 
-    def on_acquire_start(self, context_span: 'Span') -> None:
+    def on_acquire_start(self, ctx: 'Span') -> None:
         pass
 
-    def on_acquire_end(self, context_span: 'Span',
+    def on_acquire_end(self, ctx: 'Span',
                        err: Optional[Exception]) -> None:
         if err:
-            context_span.tag('error.message', str(err))
-            context_span.annotate(traceback.format_exc())
+            ctx.tag('error.message', str(err))
+            ctx.annotate(traceback.format_exc())
 
-    def on_query_start(self, context_span: 'Span', id: str, query: str,
+    def on_query_start(self, ctx: 'Span', id: str, query: str,
                        args: tuple, timeout: Optional[float]) -> None:
         pass
 
-    def on_query_end(self, context_span: 'Span',
+    def on_query_end(self, ctx: 'Span',
                      err: Optional[Exception], result) -> None:
         if err:
-            context_span.tag('error.message', str(err))
-            context_span.annotate(traceback.format_exc())
+            ctx.tag('error.message', str(err))
+            ctx.annotate(traceback.format_exc())
 
 
 class Postgres(Component):
@@ -122,63 +122,63 @@ class Postgres(Component):
             self.app.log_info("Disconnecting from %s" % self._masked_url)
             await self.pool.close()
 
-    def connection(self, context_span: Span,
+    def connection(self, ctx: Span,
                    acquire_timeout=None,
                    tracer_config: Optional[PostgresTracerConfig] = None
                    ) -> 'ConnectionContextManager':
-        return ConnectionContextManager(self, context_span,
+        return ConnectionContextManager(self, ctx,
                                         acquire_timeout=acquire_timeout,
                                         tracer_config=tracer_config)
 
-    async def query_one(self, context_span: Span, id: str, query: str,
+    async def query_one(self, ctx: Span, id: str, query: str,
                         *args: Any, timeout: float = None,
                         tracer_config: Optional[PostgresTracerConfig] = None
                         ) -> asyncpg.protocol.Record:
-        async with self.connection(context_span,
+        async with self.connection(ctx,
                                    tracer_config=tracer_config) as conn:
-            return await conn.query_one(context_span, id, query, *args,
+            return await conn.query_one(ctx, id, query, *args,
                                         timeout=timeout,
                                         tracer_config=tracer_config)
 
-    async def query_all(self, context_span: Span, id: str, query: str,
+    async def query_all(self, ctx: Span, id: str, query: str,
                         *args: Any, timeout: float = None,
                         tracer_config: Optional[PostgresTracerConfig] = None
                         ) -> List[asyncpg.protocol.Record]:
-        async with self.connection(context_span,
+        async with self.connection(ctx,
                                    tracer_config=tracer_config) as conn:
-            return await conn.query_all(context_span, id, query, *args,
+            return await conn.query_all(ctx, id, query, *args,
                                         timeout=timeout,
                                         tracer_config=tracer_config)
 
-    async def execute(self, context_span: Span, id: str, query: str,
+    async def execute(self, ctx: Span, id: str, query: str,
                       *args: Any, timeout: float = None,
                       tracer_config: Optional[PostgresTracerConfig] = None
                       ) -> str:
-        async with self.connection(context_span,
+        async with self.connection(ctx,
                                    tracer_config=tracer_config) as conn:
-            return await conn.execute(context_span, id, query, *args,
+            return await conn.execute(ctx, id, query, *args,
                                       timeout=timeout,
                                       tracer_config=tracer_config)
 
-    async def health(self, ctx_span: Span):
-        async with self.connection(ctx_span) as conn:
-            await conn.execute(ctx_span, 'test', 'SELECT 1')
+    async def health(self, ctx: Span):
+        async with self.connection(ctx) as conn:
+            await conn.execute(ctx, 'test', 'SELECT 1')
 
 
 class ConnectionContextManager:
-    def __init__(self, db: Postgres, context_span: Span,
+    def __init__(self, db: Postgres, ctx: Span,
                  acquire_timeout: float = None,
                  tracer_config: Optional[PostgresTracerConfig] = None) -> None:
         self._db = db
         self._conn = None
-        self._context_span = context_span
+        self._ctx = ctx
         self._acquire_timeout = acquire_timeout
         self._tracer_config = tracer_config
 
     async def __aenter__(self) -> 'Connection':
         span = None
-        if self._context_span:
-            span = self._context_span.new_child()
+        if self._ctx:
+            span = self._ctx.new_child()
         try:
             if span:
                 span.kind(CLIENT)
@@ -211,12 +211,12 @@ class ConnectionContextManager:
 
 
 class TransactionContextManager:
-    def __init__(self, context_span: Span, conn: 'Connection',
+    def __init__(self, ctx: Span, conn: 'Connection',
                  isolation_level: str = None,
                  tracer_config: Optional[PostgresTracerConfig] = None) -> None:
         self._conn = conn
         self._isolation_level = isolation_level
-        self._context_span = context_span
+        self._ctx = ctx
         self._tracer_config = tracer_config
 
     def _begin_query(self) -> str:
@@ -226,7 +226,7 @@ class TransactionContextManager:
         return query
 
     async def __aenter__(self) -> None:
-        await self._conn.execute(self._context_span,
+        await self._conn.execute(self._ctx,
                                  query=self._begin_query(),
                                  id="BeginTransaction",
                                  tracer_config=self._tracer_config)
@@ -234,11 +234,11 @@ class TransactionContextManager:
     async def __aexit__(self, exc_type: type, exc: BaseException,
                         tb: type) -> bool:
         if exc:
-            await self._conn.execute(self._context_span,
+            await self._conn.execute(self._ctx,
                                      query="ROLLBACK", id="Rollback",
                                      tracer_config=self._tracer_config)
         else:
-            await self._conn.execute(self._context_span,
+            await self._conn.execute(self._ctx,
                                      query="COMMIT", id="Commit",
                                      tracer_config=self._tracer_config)
         return False
@@ -250,20 +250,20 @@ class Connection:
         self._db = db
         self._conn = conn
 
-    def xact(self, context_span: Span,
+    def xact(self, ctx: Span,
              isolation_level: str = None,
              tracer_config: Optional[PostgresTracerConfig] = None
              ) -> 'TransactionContextManager':
-        return TransactionContextManager(context_span, self, isolation_level,
+        return TransactionContextManager(ctx, self, isolation_level,
                                          tracer_config)
 
-    async def execute(self, context_span: Span, id: str,
+    async def execute(self, ctx: Span, id: str,
                       query: str, *args: Any, timeout: float = None,
                       tracer_config: Optional[
                           PostgresTracerConfig] = None) -> str:
         span = None
-        if context_span:
-            span = context_span.new_child()
+        if ctx:
+            span = ctx.new_child()
 
         try:
             if span:
@@ -291,14 +291,14 @@ class Connection:
 
         return res
 
-    async def query_one(self, context_span: Span, id: str,
+    async def query_one(self, ctx: Span, id: str,
                         query: str, *args: Any,
                         timeout: float = None,
                         tracer_config: Optional[PostgresTracerConfig] = None
                         ) -> asyncpg.protocol.Record:
         span = None
-        if context_span:
-            span = context_span.new_child()
+        if ctx:
+            span = ctx.new_child()
         try:
             if span:
                 span.kind(CLIENT)
@@ -324,13 +324,13 @@ class Connection:
             raise
         return res
 
-    async def query_all(self, context_span: Span, id: str,
+    async def query_all(self, ctx: Span, id: str,
                         query: str, *args: Any, timeout: float = None,
                         tracer_config: Optional[PostgresTracerConfig] = None
                         ) -> List[asyncpg.protocol.Record]:
         span = None
-        if context_span:
-            span = context_span.new_child()
+        if ctx:
+            span = ctx.new_child()
         try:
             if span:
                 span.kind(CLIENT)

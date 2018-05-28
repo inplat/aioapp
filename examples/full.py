@@ -12,30 +12,30 @@ class HttpHandler(http.Handler):
         self.server.add_route('GET', '/', self.home_handler)
         self.server.set_error_handler(self.error_handler)
 
-    async def error_handler(self, context_span, request: web_request.Request,
+    async def error_handler(self, ctx, request: web_request.Request,
                             error: Exception) -> web.Response:
         self.app.log_err(error)
         if isinstance(error, web.HTTPException):
             return error
         return web.Response(body='Internal Error: ' + str(error), status=500)
 
-    async def home_handler(self, context_span,
+    async def home_handler(self, ctx,
                            request: web_request.Request) -> web.Response:
-        with context_span.tracer.new_child(context_span.context) as span:
+        with ctx.tracer.new_child(ctx.context) as span:
             span.name('test:sleep')
-            with span.tracer.new_child(context_span.context) as span2:
+            with span.tracer.new_child(ctx.context) as span2:
                 span2.name('test2:sleep')
                 await asyncio.sleep(.1, loop=self.app.loop)
 
-        await self.app.db.query_one(context_span,
+        await self.app.db.query_one(ctx,
                                     'postgres:test', 'SELECT $1::int as a',
                                     123)
-        await self.app.tg.send_message(context_span,
+        await self.app.tg.send_message(ctx,
                                        1825135, request.url)
 
-        await self.app.redis.execute(context_span, 'redis:set',
+        await self.app.redis.execute(ctx, 'redis:set',
                                      'SET', 'key', 1)
-        res = await self.app.redis.execute(context_span, 'redis:set',
+        res = await self.app.redis.execute(ctx, 'redis:set',
                                            'GET', 'key')
 
         return web.Response(text='Hello world! ' + res)
@@ -52,16 +52,16 @@ class TelegramHandler(chat.TelegramHandler):
             self.bot.add_command(regexp, fn)
         self.bot.set_default(self.default)
 
-    async def default(self, context_span, chat, message):
+    async def default(self, ctx, chat, message):
         await asyncio.sleep(0.2)
-        await self.bot.send_message(context_span, chat.id,
-                                    'what?' + str(context_span))
+        await self.bot.send_message(ctx, chat.id,
+                                    'what?' + str(ctx))
 
-    async def start(self, context_span, chat, match):
-        await chat.send_text(context_span, 'hello')
+    async def start(self, ctx, chat, match):
+        await chat.send_text(ctx, 'hello')
 
-    async def echo(self, context_span, chat, match):
-        await chat.reply(context_span, match.group(1))
+    async def echo(self, ctx, chat, match):
+        await chat.reply(ctx, match.group(1))
 
 
 if __name__ == '__main__':

@@ -73,13 +73,13 @@ async def test_amqp(app, rabbitmq):
             await self.open()
             await self.consume(self.callback, self.queue)
 
-        async def callback(self, context_span,
+        async def callback(self, ctx,
                            channel: aioamqp.channel.Channel, body: bytes,
                            envelope: aioamqp.envelope.Envelope,
                            properties: aioamqp.properties.Properties):
-            await self.ack(context_span, envelope.delivery_tag)
-            if context_span:
-                context_span.annotate(body.decode('UTF-8'))
+            await self.ack(ctx, envelope.delivery_tag)
+            if ctx:
+                ctx.annotate(body.decode('UTF-8'))
             if body == msg_id:
                 messages.append((channel, body, envelope, properties))
                 fut.set_result((channel, body, envelope, properties))

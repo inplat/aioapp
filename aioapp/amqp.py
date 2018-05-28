@@ -24,19 +24,19 @@ STOP_TIMEOUT = 5
 
 
 class AmqpTracerConfig:
-    def on_publish_start(self, context_span: 'Span',
+    def on_publish_start(self, ctx: 'Span',
                          channel: 'aioamqp.channel.Channel', payload: bytes,
                          exchange_name: str, routing_key: str,
                          properties: Optional[dict], mandatory: bool,
                          immediate: bool) -> None:
         pass
 
-    def on_publish_end(self, context_span: 'Span',
+    def on_publish_end(self, ctx: 'Span',
                        channel: 'aioamqp.channel.Channel',
                        err: Optional[Exception]) -> None:
         if err:
-            context_span.tag('error.message', str(err))
-            context_span.annotate(traceback.format_exc())
+            ctx.tag('error.message', str(err))
+            ctx.annotate(traceback.format_exc())
 
     def on_ack_start(self, span: 'Span', channel: 'aioamqp.channel.Channel',
                      delivery_tag: str, multiple: bool) -> None:
@@ -80,22 +80,22 @@ class Channel:
         if self.channel:
             await self.channel.close()
 
-    async def publish(self, context_span: Span, payload: bytes,
+    async def publish(self, ctx: Span, payload: bytes,
                       exchange_name: str, routing_key: str,
                       properties: Optional[dict] = None,
                       mandatory: bool = False, immediate: bool = False,
                       tracer_config: Optional[AmqpTracerConfig] = None,
                       propagate_trace: bool = True, retry: bool = True):
         span = None
-        if context_span:
-            span = context_span.new_child(
+        if ctx:
+            span = ctx.new_child(
                 'amqp:publish {} {}'.format(exchange_name, routing_key),
                 CLIENT
             )
             span.metrics_tag(SPAN_TYPE, SPAN_TYPE_AMQP)
             span.metrics_tag(SPAN_KIND, SPAN_KIND_AMQP_OUT)
             if propagate_trace:
-                headers = context_span.make_headers()
+                headers = ctx.make_headers()
                 properties = properties or {}
                 if 'headers' not in properties:
                     properties['headers'] = {}
@@ -119,7 +119,7 @@ class Channel:
                 span.annotate(traceback.format_exc())
                 await self.open()
                 if retry:
-                    await self.publish(context_span, payload, exchange_name,
+                    await self.publish(ctx, payload, exchange_name,
                                        routing_key, properties, mandatory,
                                        immediate, tracer_config,
                                        propagate_trace, retry=False)
@@ -150,25 +150,25 @@ class Channel:
         self._cons_tag = res['consumer_tag']
         return res
 
-    async def ack(self, context_span: Span, delivery_tag: str,
+    async def ack(self, ctx: Span, delivery_tag: str,
                   multiple: bool = False,
                   tracer_config: Optional[AmqpTracerConfig] = None) -> None:
-        await self._ack_nack(context_span, True, delivery_tag, multiple,
+        await self._ack_nack(ctx, True, delivery_tag, multiple,
                              tracer_config)
 
-    async def nack(self, context_span: Span, delivery_tag: str,
+    async def nack(self, ctx: Span, delivery_tag: str,
                    multiple: bool = False,
                    tracer_config: Optional[AmqpTracerConfig] = None) -> None:
-        await self._ack_nack(context_span, False, delivery_tag, multiple,
+        await self._ack_nack(ctx, False, delivery_tag, multiple,
                              tracer_config)
 
-    async def _ack_nack(self, context_span: Span, is_ack: bool,
+    async def _ack_nack(self, ctx: Span, is_ack: bool,
                         delivery_tag: str, multiple: bool = False,
                         tracer_config: Optional[AmqpTracerConfig] = None):
         span = None
-        if context_span:
+        if ctx:
             tracer_config = tracer_config or AmqpTracerConfig()
-            span = context_span.new_child('amqp:ack', CLIENT)
+            span = ctx.new_child('amqp:ack', CLIENT)
             span.metrics_tag(SPAN_TYPE, SPAN_TYPE_AMQP)
             span.start()
         try:
@@ -433,6 +433,6 @@ class Amqp(Component):
                     return ch
         return None
 
-    async def health(self, ctx_span: Span):
+    async def health(self, ctx: Span):
         channel = await self._protocol.channel()
         await channel.close()

@@ -15,15 +15,15 @@ from .tracer import (Span, CLIENT, SERVER, SPAN_TYPE, SPAN_KIND,
 
 class TelegramTracerConfig:
 
-    def on_api_call_start(self, context_span: 'Span', method: str,
+    def on_api_call_start(self, ctx: 'Span', method: str,
                           params: dict) -> None:
         pass
 
-    def on_api_call_end(self, context_span: 'Span',
+    def on_api_call_end(self, ctx: 'Span',
                         err: Optional[Exception], result) -> None:
         if err:
-            context_span.tag('error.message', str(err))
-            context_span.annotate(traceback.format_exc())
+            ctx.tag('error.message', str(err))
+            ctx.annotate(traceback.format_exc())
 
 
 class TelegramHandler(object):
@@ -108,25 +108,25 @@ class Telegram(Component):
             except Exception as err:
                 self.app.log_err(err)
 
-    async def health(self, ctx_span: Span):
+    async def health(self, ctx: Span):
         await self.bot.get_me()
 
-    async def send_message(self, context_span, chat_id, text,
+    async def send_message(self, ctx, chat_id, text,
                            tracer_config: Optional[
                                TelegramTracerConfig] = None,
                            **options) -> None:
-        await self.api_call(context_span, "sendMessage",
+        await self.api_call(ctx, "sendMessage",
                             chat_id=chat_id, text=text,
                             tracer_config=tracer_config, **options)
 
-    async def api_call(self, context_span: Span, method,
+    async def api_call(self, ctx: Span, method,
                        tracer_config: Optional[TelegramTracerConfig] = None,
                        **params):
         self._active_calls += 1
         try:
             span = None
-            if context_span:
-                span = context_span.new_child()
+            if ctx:
+                span = ctx.new_child()
             try:
                 if span:
                     span.name('telegram:%s' % method)
@@ -267,20 +267,20 @@ class TelegramChat:
         self.message: dict = chat.message
         self.type: str = chat.type
 
-    async def send_text(self, context_span, text,
+    async def send_text(self, ctx, text,
                         tracer_config: Optional[TelegramTracerConfig] = None,
                         **options):
-        await self._bot.send_message(context_span, self.id, text,
+        await self._bot.send_message(ctx, self.id, text,
                                      tracer_config=tracer_config,
                                      **options)
 
-    async def reply(self, context_span, text, markup=None, parse_mode=None,
+    async def reply(self, ctx, text, markup=None, parse_mode=None,
                     tracer_config: Optional[TelegramTracerConfig] = None):
         if markup is None:
             markup = {}
 
         await self.send_text(
-            context_span,
+            ctx,
             text,
             reply_to_message_id=self._chat.message["message_id"],
             disable_web_page_preview='true',
