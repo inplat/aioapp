@@ -73,7 +73,7 @@ def test_config():
             'floatval_def': {
                 'type': float,
                 'name': 'FLOATVAL_DEF',
-                'not_null': False,
+                'required': False,
             },
             'temp_path': {
                 'type': 'dir',
@@ -125,7 +125,7 @@ def test_config_invalid_str():
                 'name': 'SOME_VAR',
                 'min': 5,
                 'max': 10,
-                'not_null': True
+                'required': True
             },
         }
 
@@ -138,7 +138,7 @@ def test_config_invalid_str():
     with pytest.raises(ConfigError, match='.*must be a string.*'):
         Conf({'SOME_VAR': True})
 
-    with pytest.raises(ConfigError, match='.*not null.*'):
+    with pytest.raises(ConfigError, match='.*is required.*'):
         Conf({})
 
 
@@ -149,7 +149,7 @@ def test_config_invalid_bool():
             'some_var': {
                 'type': bool,
                 'name': 'SOME_VAR',
-                'not_null': True
+                'required': True
             },
         }
 
@@ -159,7 +159,7 @@ def test_config_invalid_bool():
     with pytest.raises(ConfigError, match='.*must be a boolean.*'):
         Conf({'SOME_VAR': pytest})
 
-    with pytest.raises(ConfigError, match='.*not null.*'):
+    with pytest.raises(ConfigError, match='.*is required.*'):
         Conf({})
 
 
@@ -172,7 +172,7 @@ def test_config_invalid_int():
                 'name': 'SOME_VAR',
                 'min': 5,
                 'max': 10,
-                'not_null': True
+                'required': True
             },
         }
 
@@ -185,7 +185,7 @@ def test_config_invalid_int():
     with pytest.raises(ConfigError, match='.*must be an integer.*'):
         Conf({'SOME_VAR': pytest})
 
-    with pytest.raises(ConfigError, match='.*not null.*'):
+    with pytest.raises(ConfigError, match='.*is required.*'):
         Conf({})
 
 
@@ -198,7 +198,7 @@ def test_config_invalid_float():
                 'name': 'SOME_VAR',
                 'min': 5,
                 'max': 10,
-                'not_null': True
+                'required': True
             },
         }
 
@@ -211,7 +211,7 @@ def test_config_invalid_float():
     with pytest.raises(ConfigError, match='.*must be a float.*'):
         Conf({'SOME_VAR': pytest})
 
-    with pytest.raises(ConfigError, match='.*not null.*'):
+    with pytest.raises(ConfigError, match='.*is required.*'):
         Conf({})
 
 
@@ -222,14 +222,14 @@ def test_config_invalid_file():
             'some_var': {
                 'type': 'file',
                 'name': 'SOME_VAR',
-                'not_null': True
+                'required': True
             },
         }
 
     with pytest.raises(ConfigError, match='.*Could not access to file.*'):
         Conf({'SOME_VAR': 'asdfaur343423//.,,'})
 
-    with pytest.raises(ConfigError, match='.*not null.*'):
+    with pytest.raises(ConfigError, match='.*is required.*'):
         Conf({})
 
 
@@ -240,14 +240,14 @@ def test_config_invalid_dir():
             'some_var': {
                 'type': 'dir',
                 'name': 'SOME_VAR',
-                'not_null': True
+                'required': True
             },
         }
 
     with pytest.raises(ConfigError, match='.*does not exist.*'):
         Conf({'SOME_VAR': 'asdfaur343423//.,,'})
 
-    with pytest.raises(ConfigError, match='.*not null.*'):
+    with pytest.raises(ConfigError, match='.*is required.*'):
         Conf({})
 
 

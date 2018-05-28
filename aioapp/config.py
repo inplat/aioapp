@@ -210,24 +210,24 @@ class Config:
             val_default = None
             if 'default' in val:
                 val_default = val.pop('default')
-            not_null = False
-            if 'not_null' in val:
-                not_null = val.pop('not_null')
+            required = False
+            if 'required' in val:
+                required = bool(val.pop('required'))
             descr = ''
             if 'descr' in val:
-                descr = val.pop('descr')
+                descr = str(val.pop('descr'))
 
             self._description[val_name] = {
                 'type': val_type,
                 'default': val_default,
-                'not_null': not_null,
+                'required': required,
                 'descr': descr,
             }
 
             value = self._env.get(val_name, val_default)
             if value is None:
-                if not_null:
-                    raise ConfigError("%s must be not null" % val_name)
+                if required is True:
+                    raise ConfigError("%s is required" % val_name)
                 else:
                     setattr(self, key, None)
             else:
@@ -266,10 +266,10 @@ class Config:
             if 'descr' in options:
                 descr = ': %s' % options.pop('descr')
             text = '* %s%s\n  type: %s' % (env_name, descr,
-                                             type_cls.type_name())
-            if 'not_null' in options:
-                not_null = options.pop('not_null')
-                if not_null:
+                                           type_cls.type_name())
+            if 'required' in options:
+                required = options.pop('required')
+                if required:
                     text += '\n\n  required'
             if 'default' in options:
                 default = options.pop('default')
