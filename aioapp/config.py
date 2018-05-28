@@ -215,7 +215,7 @@ class Config:
                 not_null = val.pop('not_null')
             descr = ''
             if 'descr' in val:
-                not_null = val.pop('descr')
+                descr = val.pop('descr')
 
             self._description[val_name] = {
                 'type': val_type,
@@ -262,7 +262,11 @@ class Config:
 
             type_cls = cls._get_val(options.pop('type'))
             env_name = options.pop('name')
-            text = '* %s: %s' % (env_name, type_cls.type_name())
+            descr = ''
+            if 'descr' in options:
+                descr = ': %s' % options.pop('descr')
+            text = '* %s%s\n  type: %s' % (env_name, descr,
+                                             type_cls.type_name())
             if 'not_null' in options:
                 not_null = options.pop('not_null')
                 if not_null:

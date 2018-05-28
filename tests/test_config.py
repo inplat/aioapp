@@ -295,6 +295,7 @@ def test_config_as_markdown():
                     'default': 'some text',
                     'min': 1,
                     'max': 255,
+                    'descr': 'some descr'
                 }),
             (
                 'int_var',
@@ -329,30 +330,37 @@ def test_config_as_markdown():
                 {
                     'type': 'dir',
                     'name': 'DIR_VAR',
+                    'descr': 'path to directory'
                 }),
         ))
 
     result = '''\
-* STR_VAR: string
+* STR_VAR: some descr
+  type: string
   default: some text
   min length: 1
   max length: 255
 
-* INT_VAR: integer
+* INT_VAR
+  type: integer
   min value: 10
   max value: 20
 
-* FLOAT_VAR: float
+* FLOAT_VAR
+  type: float
   min value: 10
   max value: 20
 
-* BOOL_VAR: boolean
+* BOOL_VAR
+  type: boolean
 
-* FILE_VAR: string(path to file)
+* FILE_VAR
+  type: string(path to file)
   assess mode: r
   encoding: UTF-8
 
-* DIR_VAR: string(path to dir)
+* DIR_VAR: path to directory
+  type: string(path to dir)
 '''
 
     assert result == Conf.as_markdown()
