@@ -107,10 +107,11 @@ async def test_telegram_prepare_failure(app, unused_tcp_port):
 
     with pytest.raises(PrepareError):
         tg = Telegram(
-            api_token='1',
+            api_token='error',
             handler=Handler,
             connect_retry_delay=0.001,
-            connect_max_attempts=2
+            connect_max_attempts=2,
+            bot_class=MockBot
         )
         app.add('tg', tg)
         await app.run_prepare()
