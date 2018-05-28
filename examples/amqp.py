@@ -9,7 +9,6 @@ from aioapp.tracer import Span
 
 
 class PubChannel(amqp.Channel):
-
     name = 'pub'
 
     async def start(self) -> None:
@@ -17,7 +16,6 @@ class PubChannel(amqp.Channel):
 
 
 class SubChannel(amqp.Channel):
-
     name = 'sub'
 
     def __init__(self):
@@ -26,10 +24,12 @@ class SubChannel(amqp.Channel):
 
     async def start(self) -> None:
         await self.open()
-        self.queue = (await self._safe_declare_queue(exclusive=True))['queue']
-        print(self.queue)
-        await self.consume(self.msg, self.queue)
-        await self.publish(None, b'msg', '', self.queue)
+        result = await self._safe_declare_queue(exclusive=True)
+        if result is not None:
+            self.queue = result['queue']
+            print(self.queue)
+            await self.consume(self.msg, self.queue)
+            await self.publish(None, b'msg', '', self.queue)  # type: ignore
 
     async def msg(self, ctx: Span,
                   channel: aioamqp.channel.Channel,
@@ -39,8 +39,10 @@ class SubChannel(amqp.Channel):
         await self.ack(ctx, envelope.delivery_tag)
         print('MESSAGE', body)
         await asyncio.sleep(1)
-        await self.amqp.channel('pub').publish(ctx, b'123', '',
-                                               self.queue)
+        if self.amqp:
+            ch = self.amqp.channel('pub')
+            if ch:
+                await ch.publish(ctx, b'123', '', self.queue)
 
 
 if __name__ == '__main__':

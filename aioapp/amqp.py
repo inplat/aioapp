@@ -64,8 +64,8 @@ class Channel:
     amqp: Optional['Amqp'] = None
     channel: 'aioamqp.channel.Channel' = None
     _cons_cnt: int = 0
-    _cons_fut: asyncio.Future = None
-    _cons_tag: str = None
+    _cons_fut: Optional[asyncio.Future] = None
+    _cons_tag: Optional[str] = None
     _stopping: bool = False
 
     async def open(self):
@@ -114,9 +114,10 @@ class Channel:
                                                  mandatory=mandatory,
                                                  immediate=immediate)
             except Exception as e:
-                span.tag('error', 'true')
-                span.tag('error.message', str(e))
-                span.annotate(traceback.format_exc())
+                if span is not None:
+                    span.tag('error', 'true')
+                    span.tag('error.message', str(e))
+                    span.annotate(traceback.format_exc())
                 await self.open()
                 if retry:
                     await self.publish(ctx, payload, exchange_name,
@@ -175,29 +176,32 @@ class Channel:
             if is_ack:
                 if span:
                     span.metrics_tag(SPAN_KIND, SPAN_KIND_AMQP_ACK)
-                    tracer_config.on_ack_start(span, self.channel,
-                                               delivery_tag, multiple)
+                    if tracer_config is not None:
+                        tracer_config.on_ack_start(span, self.channel,
+                                                   delivery_tag, multiple)
                 await self.channel.basic_client_ack(delivery_tag=delivery_tag,
                                                     multiple=multiple)
-                if span:
+                if span is not None and tracer_config is not None:
                     tracer_config.on_ack_end(span, self.channel, None)
             else:
-                span.metrics_tag(SPAN_KIND, SPAN_KIND_AMQP_NACK)
-                if span:
-                    tracer_config.on_nack_start(span, self.channel,
-                                                delivery_tag, multiple)
+                if span is not None:
+                    span.metrics_tag(SPAN_KIND, SPAN_KIND_AMQP_NACK)
+                    if tracer_config is not None:
+                        tracer_config.on_nack_start(span, self.channel,
+                                                    delivery_tag, multiple)
                 await self.channel.basic_client_nack(delivery_tag=delivery_tag,
                                                      multiple=multiple)
-                if span:
+                if span is not None and tracer_config is not None:
                     tracer_config.on_nack_end(span, self.channel, None)
             if span:
                 span.finish()
         except Exception as err:
-            if span:
-                if is_ack:
-                    tracer_config.on_ack_end(span, self.channel, err)
-                else:
-                    tracer_config.on_nack_end(span, self.channel, err)
+            if span is not None:
+                if tracer_config is not None:
+                    if is_ack:
+                        tracer_config.on_ack_end(span, self.channel, err)
+                    else:
+                        tracer_config.on_nack_end(span, self.channel, err)
                 span.finish(exception=err)
             raise
 
@@ -206,6 +210,8 @@ class Channel:
                                         body: bytes,
                                         envelope: aioamqp.envelope.Envelope,
                                         properties: amqp_prop.Properties):
+        if self.amqp is None or self.amqp.loop is None:
+            raise UserWarning('Unattached component')
         async_call(self.amqp.loop,
                    partial(
                        self._consume_callback, callback, channel, body,
@@ -215,13 +221,16 @@ class Channel:
                                 channel: aioamqp.channel.Channel, body: bytes,
                                 envelope: aioamqp.envelope.Envelope,
                                 properties: amqp_prop.Properties):
+        if self.amqp is None or self.amqp.app is None:
+            raise UserWarning('Unattached component')
+
         if not channel.is_open:
             return
 
         self._cons_cnt += 1
         span = None
         try:
-            if self.amqp.app.tracer:
+            if self.amqp.app.tracer is not None:
                 span = self.amqp.app.tracer.new_trace_from_headers(
                     properties.headers)
                 span.name('amqp:message')
@@ -279,6 +288,9 @@ class Channel:
                                   durable=False, exclusive=False,
                                   auto_delete=False, no_wait=False,
                                   arguments=None) -> Optional[dict]:
+        if self.amqp is None:
+            raise UserWarning('Unattached component')
+
         ch = await self.amqp._protocol.channel()
         try:
             res = await ch.queue_declare(queue_name=queue_name,
@@ -301,6 +313,9 @@ class Channel:
                                      passive=False, durable=False,
                                      auto_delete=False, no_wait=False,
                                      arguments=None) -> Optional[dict]:
+        if self.amqp is None:
+            raise UserWarning('Unattached component')
+
         ch = await self.amqp._protocol.channel()
         try:
             res = await ch.exchange_declare(exchange_name=exchange_name,
@@ -350,6 +365,9 @@ class Amqp(Component):
         return mask_url_pwd(self.url)
 
     async def prepare(self) -> None:
+        if self.app is None:
+            raise UserWarning('Unattached component')
+
         self._connecting = True
         for i in range(self.connect_max_attempts):
             try:

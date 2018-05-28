@@ -199,6 +199,8 @@ class Server(Component):
             await self._runner.cleanup()
 
     async def health(self, ctx: Span):
+        if self.loop is None:
+            return
 
         coro = asyncio.open_connection(host=self.host, port=self.port,
                                        loop=self.loop)

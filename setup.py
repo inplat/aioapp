@@ -12,10 +12,13 @@ PY_VER = sys.version_info
 if not PY_VER >= (3, 6):
     raise RuntimeError('aioapp does not support Python earlier than 3.6')
 
-
 with open('aioapp/__init__.py') as ver_file:
-    version = re.compile(r".*__version__ = '(.*?)'",
-                         re.S).match(ver_file.read()).group(1)
+    ver = re.compile(r".*__version__ = '(.*?)'",
+                     re.S).match(ver_file.read())
+    if ver is not None:
+        version = ver.group(1)
+    else:
+        version = '0.0.0'
 
 with open('README.rst') as readme_file:
     readme = readme_file.read()

@@ -59,10 +59,14 @@ class Postgres(Component):
         return self._pool
 
     @property
-    def _masked_url(self) -> str:
-        return mask_url_pwd(self.url)
+    def _masked_url(self) -> Optional[str]:
+        if self.url is not None:
+            return mask_url_pwd(self.url)
 
     async def _connect(self) -> None:
+        if self.app is None:
+            raise UserWarning('Unattached component')
+
         self.app.log_info("Connecting to %s" % self._masked_url)
         self._pool: asyncpg.pool.Pool = await asyncpg.create_pool(
             dsn=self.url,
@@ -105,6 +109,9 @@ class Postgres(Component):
         )
 
     async def prepare(self) -> None:
+        if self.app is None:
+            raise UserWarning('Unattached component')
+
         for i in range(self.connect_max_attempts):
             try:
                 await self._connect()
@@ -118,6 +125,9 @@ class Postgres(Component):
         pass
 
     async def stop(self) -> None:
+        if self.app is None:
+            raise UserWarning('Unattached component')
+
         if self.pool:
             self.app.log_info("Disconnecting from %s" % self._masked_url)
             await self.pool.close()

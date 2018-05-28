@@ -55,6 +55,9 @@ class Redis(Component):
         self.pool = None
 
     async def prepare(self):
+        if self.app is None:
+            raise UserWarning('Unattached component')
+
         for i in range(self.connect_max_attempts):
             try:
                 await self._connect()

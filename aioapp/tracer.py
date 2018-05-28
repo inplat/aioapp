@@ -59,11 +59,12 @@ SERVER_ADDR = 'sa'
 
 class Span:
     def __init__(self,
-                 tracer: 'Tracer',
-                 metrics: 'InfluxMetrics',
+                 tracer: Optional['Tracer'],
+                 metrics: Optional['InfluxMetrics'],
                  trace_id: str, id: Optional[str] = None,
                  parent_id: Optional[str] = None,
-                 sampled: Optional[bool] = None, debug: bool = False,
+                 sampled: Optional[bool] = None,
+                 debug: Optional[bool] = False,
                  shared: bool = False,
                  skip: bool = False) -> None:
         self.tracer = tracer
@@ -79,7 +80,7 @@ class Span:
         self._tags: dict = {}
         self._tags_metrics: dict = {}
         self._annotations: list = []
-        self._remote_endpoint: tuple = None
+        self._remote_endpoint: Optional[tuple] = None
         self._start_stamp: Optional[int] = None
         self._finish_stamp: Optional[int] = None
         self._span: Any = None
@@ -130,24 +131,25 @@ class Span:
             self.tag('error', 'true', True)
             self.tag('error.message', str(exception))
 
-        if self.tracer.tracer_driver == DRIVER_ZIPKIN:
-            _span = self.get_zipkin_span()
-
-            _span.start(ts=self._start_stamp/1000000)
-            for _tag_name, _tag_val in self._tags.items():
-                _span.tag(_tag_name, _tag_val)
-            for _ann, _ann_stamp in self._annotations:
-                _span.annotate(_ann, _ann_stamp / 1000000)
-            if self._kind:
-                _span.kind(self._kind)
-            if self._name:
-                _span.name(self._name)
-            if self._remote_endpoint:
-                _span.remote_endpoint(self._remote_endpoint[0],
-                                      ipv4=self._remote_endpoint[1],
-                                      ipv6=self._remote_endpoint[2],
-                                      port=self._remote_endpoint[3])
-            _span.finish(ts=now, exception=exception)
+        if self.tracer is not None:
+            if self.tracer.tracer_driver == DRIVER_ZIPKIN:
+                _span = self.get_zipkin_span()
+                if self._start_stamp is not None:
+                    _span.start(ts=self._start_stamp/1000000)
+                    for _tag_name, _tag_val in self._tags.items():
+                        _span.tag(_tag_name, _tag_val)
+                    for _ann, _ann_stamp in self._annotations:
+                        _span.annotate(_ann, _ann_stamp / 1000000)
+                    if self._kind:
+                        _span.kind(self._kind)
+                    if self._name:
+                        _span.name(self._name)
+                    if self._remote_endpoint:
+                        _span.remote_endpoint(self._remote_endpoint[0],
+                                              ipv4=self._remote_endpoint[1],
+                                              ipv6=self._remote_endpoint[2],
+                                              port=self._remote_endpoint[3])
+                    _span.finish(ts=now, exception=exception)
 
         if self.metrics and not self._skip:
             self.metrics.send(self)

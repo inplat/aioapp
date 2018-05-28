@@ -15,8 +15,8 @@ def _raise_graceful_exit():  # pragma: no cover
 class Component(object):
     def __init__(self) -> None:
         super(Component, self).__init__()
-        self.loop: asyncio.AbstractEventLoop = None
-        self.app: 'Application' = None
+        self.loop: Optional[asyncio.AbstractEventLoop] = None
+        self.app: Optional['Application'] = None
 
     async def prepare(self) -> None:
         raise NotImplementedError()

@@ -43,9 +43,9 @@ class Telegram(Component):
                  connect_retry_delay: float = 1.0,
                  api_timeout: int = 60, bot_class=Bot) -> None:
         super(Telegram, self).__init__()
-        self.tg_id: int = None
-        self.tg_first_name: str = None
-        self.tg_username: str = None
+        self.tg_id: Optional[int] = None
+        self.tg_first_name: Optional[str] = None
+        self.tg_username: Optional[str] = None
         self.api_token: str = api_token
         self.bot: Bot = bot_class(self.api_token,
                                   api_timeout=api_timeout,
@@ -53,14 +53,16 @@ class Telegram(Component):
         self.handler = handler(self)
         self._connect_max_attempts: int = connect_max_attempts
         self._connect_retry_delay: float = connect_retry_delay
-        self._run_fut: asyncio.Future = None
+        self._run_fut: Optional[asyncio.Future] = None
         self._stopping: bool = False
         self._active_calls: int = 0
-        self._stop_calls_fut: asyncio.Future = None
+        self._stop_calls_fut: Optional[asyncio.Future] = None
         self._active_msgs: int = 0
-        self._stop_msgs_fut: asyncio.Future = None
+        self._stop_msgs_fut: Optional[asyncio.Future] = None
 
     async def prepare(self) -> None:
+        if self.app is None:
+            raise UserWarning('Unattached component')
         attempt = 0
         while True:
             try:
@@ -135,7 +137,8 @@ class Telegram(Component):
                     span.kind(CLIENT)
                     span.tag('telegram.method', method, True)
                     if 'chat_id' in params:
-                        span.tag('telegram:chat_id', params.get('chat_id'))
+                        span.tag('telegram:chat_id',
+                                 str(params.get('chat_id')))
                     span.annotate(json_encode(params))
                     span.start()
                     if tracer_config:
@@ -155,7 +158,8 @@ class Telegram(Component):
         finally:
             self._active_calls -= 1
             if self._stopping and self._active_calls == 0:
-                self._stop_calls_fut.set_result(1)
+                if self._stop_calls_fut is not None:
+                    self._stop_calls_fut.set_result(1)
 
     def add_command(self, regexp, fn: Callable[[Span, 'TelegramChat',
                                                 Any], None]) -> None:
