@@ -1,5 +1,4 @@
 import asyncio
-from typing import Tuple
 from aioapp.app import Application
 from aioapp.db import Postgres, Redis
 from aioapp.error import PrepareError
@@ -154,7 +153,7 @@ async def test_redis_prepare_failure(app, unused_tcp_port):
 
 
 async def test_postgres_health_bad(app: Application, unused_tcp_port: int,
-                                loop: asyncio.AbstractEventLoop) -> None:
+                                   loop: asyncio.AbstractEventLoop) -> None:
     url = 'postgres://postgres@%s:%s/postgres' % ('127.0.0.1', unused_tcp_port)
 
     db = Postgres(url)
@@ -177,7 +176,7 @@ async def test_postgres_health_bad(app: Application, unused_tcp_port: int,
 
 
 async def test_postgres_health_ok(app: Application, postgres: str,
-                               loop: asyncio.AbstractEventLoop) -> None:
+                                  loop: asyncio.AbstractEventLoop) -> None:
     db = Postgres(postgres)
     app.add('postgres', db)
 

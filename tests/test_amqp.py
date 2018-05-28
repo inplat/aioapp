@@ -1,7 +1,7 @@
 import asyncio
 import uuid
 import pytest
-from typing import Tuple, Optional
+from typing import Optional
 import aioamqp.channel
 import aioamqp.envelope
 import aioamqp.properties
@@ -140,8 +140,9 @@ async def test_amqp_prepare_failure(app, unused_tcp_port):
                           connect_retry_delay=0.001
                           )
 
+
 async def test_amqp_health_bad(app: Application, unused_tcp_port: int,
-                                loop: asyncio.AbstractEventLoop) -> None:
+                               loop: asyncio.AbstractEventLoop) -> None:
     url = 'amqp://guest:guest@%s:%s/' % ('127.0.0.1', unused_tcp_port)
 
     amqp = Amqp(url)
@@ -164,7 +165,7 @@ async def test_amqp_health_bad(app: Application, unused_tcp_port: int,
 
 
 async def test_amqp_health_ok(app: Application, rabbitmq: str,
-                               loop: asyncio.AbstractEventLoop) -> None:
+                              loop: asyncio.AbstractEventLoop) -> None:
     amqp = Amqp(rabbitmq)
     app.add('amqp', amqp)
 
