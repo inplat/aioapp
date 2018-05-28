@@ -3,7 +3,7 @@ import signal
 import logging
 from typing import Dict, Optional
 from .error import PrepareError, GracefulExit
-from .tracer import Tracer
+from .tracer import Tracer, Span
 
 logger = logging.getLogger('aioapp')
 
@@ -25,6 +25,13 @@ class Component(object):
         raise NotImplementedError()
 
     async def stop(self) -> None:
+        raise NotImplementedError()
+
+    async def health(self, ctx_span: Span) -> None:
+        """
+        Raises exception if not healthy
+        :raises: Exception
+        """
         raise NotImplementedError()
 
 
@@ -151,3 +158,15 @@ class Application(object):
                 await self._stop_comp(dep_name)
         await self._components[name].stop()
         self._stopped.append(name)
+
+    async def health(self) -> Dict[str, Optional[BaseException]]:
+        with self.tracer.new_trace() as span:
+            span.name('healthcheck')
+            result: Dict[str, Optional[BaseException]] = {}
+            for name, cmp in self._components.items():
+                try:
+                    await cmp.health(span)
+                    result[name] = None
+                except BaseException as err:
+                    result[name] = err
+            return result

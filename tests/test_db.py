@@ -3,16 +3,15 @@ from aioapp.app import Application
 from aioapp.db import Postgres, Redis
 from aioapp.error import PrepareError
 from async_timeout import timeout
-import aiozipkin.span as azs
 import pytest
 import string
 from aioapp.misc import rndstr
+from aioapp.tracer import Span
 
 
-async def _start_postgres(app: Application, addr: Tuple[str, int],
+async def _start_postgres(app: Application, url: str,
                           connect_max_attempts=10,
                           connect_retry_delay=1.0) -> Postgres:
-    url = 'postgres://postgres@%s:%d/postgres' % (addr[0], addr[1])
     db = Postgres(url, connect_max_attempts=connect_max_attempts,
                   connect_retry_delay=connect_retry_delay)
     app.add('db', db)
@@ -21,10 +20,9 @@ async def _start_postgres(app: Application, addr: Tuple[str, int],
     return db
 
 
-async def _start_redis(app: Application, addr: Tuple[str, int],
+async def _start_redis(app: Application, url: str,
                        connect_max_attempts=10,
                        connect_retry_delay=1.0) -> Redis:
-    url = 'redis://%s:%d/0?encoding=utf-8' % (addr[0], addr[1])
     db = Redis(url, connect_max_attempts=connect_max_attempts,
                connect_retry_delay=connect_retry_delay)
     app.add('redis', db)
@@ -33,7 +31,7 @@ async def _start_redis(app: Application, addr: Tuple[str, int],
     return db
 
 
-def _create_span(app) -> azs.SpanAbc:
+def _create_span(app) -> Span:
     if app.tracer:
         return app.tracer.new_trace(sampled=False, debug=False)
 
@@ -105,7 +103,8 @@ async def test_postgres(app, postgres):
 
 async def test_postgres_prepare_failure(app, unused_tcp_port):
     with pytest.raises(PrepareError):
-        await _start_postgres(app, ('127.0.0.1', unused_tcp_port),
+        await _start_postgres(app, 'postgres://postgres@%s:%s/postgres'
+                                   '' % ('127.0.0.1', unused_tcp_port),
                               connect_max_attempts=2,
                               connect_retry_delay=0.001)
 
@@ -147,5 +146,6 @@ async def test_redis(app, redis):
 
 async def test_redis_prepare_failure(app, unused_tcp_port):
     with pytest.raises(PrepareError):
-        await _start_redis(app, ('127.0.0.1', unused_tcp_port),
+        await _start_redis(app,
+                           'redis://%s:%s/1' % ('127.0.0.1', unused_tcp_port),
                            connect_max_attempts=2, connect_retry_delay=0.001)

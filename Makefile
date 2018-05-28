@@ -79,28 +79,37 @@ test: venv ## run tests
 test-all: venv ## run tests on every Python version with tox
 	$(VENV_BIN)/tox
 
+
+
 .PHONY: fast-test-prepare
-fast-test-prepare:
-	docker-compose up -d
-	@echo Grafana URL: http://localhost:10106/login
-	@echo Grafana username: admin
-	@echo Grafana password: admin
-	@echo Grafana Add data source as influxDb URL: http://influxdb:8086/ database: telegraf username: telegraf password: telegraf
+fast-test-prepare: ## fast-test-prepare
+	docker-compose -f tests/docker-compose.yml up -d
 
 .PHONY: fast-test
-fast-test: venv
-	$(VENV_BIN)/pytest -s -v --rabbit-addr=127.0.0.1:10102 --postgres-addr=127.0.0.1:10103 --redis-addr=127.0.0.1:10104 --tracer-addr=127.0.0.1:10100 --metrics-addr=udp://127.0.0.1:10105 tests
+fast-test: venv ## fast-test
+	pytest -s -v --rabbitmq-addr=amqp://guest:guest@127.0.0.1:19803/ --postgres-addr=postgres://postgres@127.0.0.1:19801/postgres --redis-addr=redis://127.0.0.1:19802/1?encoding=utf-8 --tracer-addr=127.0.0.1:19806 --metrics-addr=udp://127.0.0.1:19804 tests
 
 .PHONY: fast-coverage
 fast-coverage: venv ## make coverage report and open it in browser
-		$(VENV_BIN)/coverage run --source aioapp -m pytest tests -v --rabbit-addr=127.0.0.1:10102 --postgres-addr=127.0.0.1:10103 --redis-addr=127.0.0.1:10104 --tracer-addr=127.0.0.1:10100 tests
+		$(VENV_BIN)/coverage run --source aioapp -m pytest tests -v --rabbitmq-addr=amqp://guest:guest@127.0.0.1:19803/ --postgres-addr=postgres://postgres@127.0.0.1:19801/postgres --redis-addr=redis://127.0.0.1:19802/1?encoding=utf-8 --tracer-addr=127.0.0.1:19806 --metrics-addr=udp://127.0.0.1:19804 tests
 		$(VENV_BIN)/coverage report -m
 		$(VENV_BIN)/coverage html
 		$(BROWSER) htmlcov/index.html
 
 .PHONY: fast-test-stop
-fast-test-stop:
-	docker-compose stop
+fast-test-stop: ## fast-test-stop
+	docker-compose -f tests/docker-compose.yml kill
+	docker-compose -f tests/docker-compose.yml rm -f
+
+.PHONY: fast-test-update
+fast-test-update: ## fast-test-update
+	docker-compose -f tests/docker-compose.yml pull
+	docker-compose -f tests/docker-compose.yml kill
+	docker-compose -f tests/docker-compose.yml rm -f
+
+.PHONY: fast-test-rebuild
+fast-test-rebuild: fast-test-update fast-test-prepare ## fast-test-rebuild
+
 
 .PHONY: coverage-quiet
 coverage-quiet: venv ## make coverage report

@@ -160,6 +160,10 @@ class Postgres(Component):
                                       timeout=timeout,
                                       tracer_config=tracer_config)
 
+    async def health(self, ctx_span: Span):
+        with self.connection(ctx_span) as conn:
+            await conn.execute('SELECT 1')
+
 
 class ConnectionContextManager:
     def __init__(self, db: Postgres, context_span: Span,

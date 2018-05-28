@@ -12,11 +12,10 @@ import aiozipkin.span as azs
 import aiozipkin.aiohttp_helpers as azah
 
 
-async def _start_amqp(app: Application, addr: Tuple[str, int],
+async def _start_amqp(app: Application, url: str,
                       channels,
                       connect_max_attempts=10,
                       connect_retry_delay=1.0) -> Amqp:
-    url = 'amqp://guest:guest@%s:%s/' % (addr[0], addr[1])
     amqp = Amqp(url, channels=channels,
                 connect_max_attempts=connect_max_attempts,
                 connect_retry_delay=connect_retry_delay)
@@ -33,7 +32,7 @@ def _create_span(app) -> Optional[azs.SpanAbc]:
         return span
 
 
-async def test_amqp(app, rabbit):
+async def test_amqp(app, rabbitmq):
     messages = []
     msg_id = str(uuid.uuid4()).encode('UTF-8')
     fut = asyncio.Future(loop=app.loop)
@@ -84,7 +83,7 @@ async def test_amqp(app, rabbit):
                 messages.append((channel, body, envelope, properties))
                 fut.set_result((channel, body, envelope, properties))
 
-    amqp = await _start_amqp(app, rabbit, channels=[
+    amqp = await _start_amqp(app, rabbitmq, channels=[
         Pubchannel('test_ex', 'test_queue'),
         SubChannel('test_queue'),
     ])
@@ -109,8 +108,8 @@ async def test_amqp(app, rabbit):
     assert len(messages) == 1
 
 
-async def test_start_without_channels(app, rabbit):
-    amqp = await _start_amqp(app, rabbit, channels=None)
+async def test_start_without_channels(app, rabbitmq):
+    amqp = await _start_amqp(app, rabbitmq, channels=None)
 
     null_channel = amqp.channel(None)
     assert null_channel is None
@@ -119,12 +118,12 @@ async def test_start_without_channels(app, rabbit):
     assert not_existing_channel is None
 
 
-async def test_not_uniq_ch_names(app, rabbit):
+async def test_not_uniq_ch_names(app, rabbitmq):
     class Pubchannel(Channel):
         name = 'not_uniq'
 
     with pytest.raises(UserWarning):
-        await _start_amqp(app, rabbit, channels=[
+        await _start_amqp(app, rabbitmq, channels=[
             Pubchannel(),
             Pubchannel(),
         ])
@@ -132,7 +131,10 @@ async def test_not_uniq_ch_names(app, rabbit):
 
 async def test_amqp_prepare_failure(app, unused_tcp_port):
     with pytest.raises(PrepareError):
-        await _start_amqp(app, ('127.0.0.1', unused_tcp_port), channels=None,
+        await _start_amqp(app,
+                          'amqp://guets:guest@%s:%s/'
+                          '' % ('127.0.0.1', unused_tcp_port),
+                          channels=None,
                           connect_max_attempts=2,
                           connect_retry_delay=0.001
                           )
