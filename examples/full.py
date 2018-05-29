@@ -9,6 +9,8 @@ from aioapp import http, db, chat, amqp, tracer
 class HttpHandler(http.Handler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+
+    async def prepare(self):
         self.server.add_route('GET', '/', self.home_handler)
         self.server.set_error_handler(self.error_handler)
 
@@ -71,11 +73,11 @@ async def span_finish(span: tracer.Span):
 if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)
 
-    telegram_api_token = os.environ.get('TELEGRAM_API_TOKEN')
-    if not telegram_api_token:
-        print('Environment variable TELEGRAM_API_TOKEN not given')
-        print('TELEGRAM_API_TOKEN=<token> python -m examples.full')
-        exit(1)
+    # telegram_api_token = os.environ.get('TELEGRAM_API_TOKEN')
+    # if not telegram_api_token:
+    #     print('Environment variable TELEGRAM_API_TOKEN not given')
+    #     print('TELEGRAM_API_TOKEN=<token> python -m examples.full')
+    #     exit(1)
 
     loop = asyncio.get_event_loop()
     app = Application(

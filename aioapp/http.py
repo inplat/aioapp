@@ -177,6 +177,7 @@ class Server(Component):
             access_log_class=self.access_log_class,
             access_log_format=self.access_log_format,
             access_log=self.access_log)
+        await self.handler.prepare()
         await self._runner.setup()
         self._sites = []
         self._sites.append(web_runner.TCPSite(
@@ -188,7 +189,6 @@ class Server(Component):
             backlog=self.backlog,
             reuse_address=self.reuse_address,
             reuse_port=self.reuse_port))
-        await self.handler.prepare()
 
     async def start(self):
         self.app.log_info("Starting http server")
