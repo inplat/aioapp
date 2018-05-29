@@ -1,4 +1,3 @@
-import os
 import logging
 import asyncio
 from aiohttp import web, web_request
