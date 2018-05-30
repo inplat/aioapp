@@ -161,7 +161,8 @@ async def docker_compose(loop, request,
         try:
             timeout = 60
             start_time = time.time()
-            print('Waiting for docker services')
+            print()
+            print('Waiting for docker services...')
             last_err = None
             while start_time + timeout > time.time():
                 try:
