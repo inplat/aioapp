@@ -56,9 +56,9 @@ class StrVal(Val):
 
     def args_markdown(self) -> str:
         text = ''
-        if self.min:
+        if self.min is not None:
             text += '\n  min length: %s' % self.min
-        if self.max:
+        if self.max is not None:
             text += '\n  max length: %s' % self.max
         return text
 
@@ -110,9 +110,9 @@ class IntVal(Val):
 
     def args_markdown(self) -> str:
         text = ''
-        if self.min:
+        if self.min is not None:
             text += '\n  min value: %s' % self.min
-        if self.max:
+        if self.max is not None:
             text += '\n  max value: %s' % self.max
         return text
 
@@ -145,9 +145,9 @@ class FloatVal(Val):
 
     def args_markdown(self) -> str:
         text = ''
-        if self.min:
+        if self.min is not None:
             text += '\n  min value: %s' % self.min
-        if self.max:
+        if self.max is not None:
             text += '\n  max value: %s' % self.max
         return text
 
@@ -176,9 +176,9 @@ class FileVal(Val):
 
     def args_markdown(self) -> str:
         text = ''
-        if self.mode:
+        if self.mode is not None:
             text += '\n  assess mode: %s' % self.mode
-        if self.encoding:
+        if self.encoding is not None:
             text += '\n  encoding: %s' % self.encoding
         return text
 
