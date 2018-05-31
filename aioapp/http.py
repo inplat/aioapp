@@ -1,5 +1,4 @@
 from abc import ABCMeta
-import io
 import ssl
 from typing import Type, Any, Optional
 from functools import partial
@@ -8,7 +7,6 @@ import traceback
 from urllib.parse import urlparse
 from aiohttp import web, web_runner, ClientSession, hdrs, helpers
 from aiohttp import ClientResponse
-from aiohttp.payload import BytesPayload
 from aiohttp import TCPConnector
 from .app import Component
 import logging
