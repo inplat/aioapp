@@ -105,12 +105,10 @@ class Server(Component):
                     span.metrics_tag(SPAN_KIND, SPAN_KIND_HTTP_IN)
                     span.tag(HTTP_PATH, request.path)
                     span.tag(HTTP_METHOD, request.method.upper(), True)
-                    _annotate_bytes(span, await request.read())
                     resp, trace_str = await self._error_handle(span, request,
                                                                handler)
                     if isinstance(resp, web.Response):
                         span.tag(HTTP_STATUS_CODE, resp.status, True)
-                        _annotate_bytes(span, resp.body)
                     if trace_str is not None:
                         span.annotate(trace_str)
                     return resp
@@ -316,15 +314,3 @@ class Client(Component):
 
     async def health(self, ctx: Span):
         pass
-
-
-def _annotate_bytes(span, data):
-    if isinstance(data, BytesPayload):
-        pl = io.BytesIO()
-        data.write(pl)
-        data = pl.getvalue()
-    try:
-        data_str = data.decode("UTF8")
-    except Exception:
-        data_str = str(data)
-    span.annotate(data_str or 'null')
