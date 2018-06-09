@@ -88,7 +88,7 @@ class Application(object):
                       tracer_default_debug: Optional[bool] = None,
                       metrics_driver=None, metrics_addr=None,
                       metrics_name=None,
-                      on_span_finish: Optional[Callable]=None):
+                      on_span_finish: Optional[Callable] = None):
         if tracer_driver:
             self.tracer.setup_tracer(tracer_driver, tracer_name, tracer_addr,
                                      tracer_sample_rate, tracer_send_inteval,
@@ -106,19 +106,21 @@ class Application(object):
 
     def run(self) -> int:
         try:
-            self.loop.run_until_complete(self.run_prepare())
-        except PrepareError as e:
-            self.log_err(e)
-            return 1
-        except KeyboardInterrupt:  # pragma: no cover
-            return 1
-        self.run_loop()
-        self.loop.run_until_complete(self.run_shutdown())
-        print("Bye")
-        if hasattr(self.loop, 'shutdown_asyncgens'):
-            self.loop.run_until_complete(self.loop.shutdown_asyncgens())
-        self.loop.close()
-        return 0
+            try:
+                self.loop.run_until_complete(self.run_prepare())
+            except PrepareError as e:
+                self.log_err(e)
+                return 1
+            except KeyboardInterrupt:  # pragma: no cover
+                return 1
+            self.run_loop()
+            return 0
+        finally:
+            self.loop.run_until_complete(self.run_shutdown())
+            print("Bye")
+            if hasattr(self.loop, 'shutdown_asyncgens'):
+                self.loop.run_until_complete(self.loop.shutdown_asyncgens())
+            self.loop.close()
 
     async def run_prepare(self):
         self.log_info('Prepare for start')
