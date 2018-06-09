@@ -34,7 +34,6 @@ def async_call(loop, func, *args, delay=None, **kwargs):
         res['fut'] = fut
 
     if delay:
-        print(delay)
         loop.call_later(delay, partial(_call, func, *args, **kwargs))
     else:
         loop.call_soon(partial(_call, func, *args, **kwargs))
