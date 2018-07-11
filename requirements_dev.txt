@@ -1,5 +1,7 @@
 -r requirements.txt
 
+requests==2.18.4
+
 flake8==3.5.0
 mypy==0.610
 bandit==1.4.0
