@@ -293,7 +293,7 @@ class Tracer:
         return span
 
     def setup_tracer(self, driver: str, name: str, addr: str,
-                     sample_rate: float, send_inteval: float,
+                     sample_rate: float, send_interval: float,
                      default_sampled: Optional[bool] = None,
                      default_debug: Optional[bool] = None) -> None:
         if driver != DRIVER_ZIPKIN:
@@ -305,7 +305,7 @@ class Tracer:
 
         endpoint = az.create_endpoint(name)
         sampler = az.Sampler(sample_rate=sample_rate)
-        transport = azt.Transport(addr, send_inteval=send_inteval,
+        transport = azt.Transport(addr, send_interval=send_interval,
                                   loop=self.loop)
         self.tracer = az.Tracer(transport, sampler, endpoint)
 
