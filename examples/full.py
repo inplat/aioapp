@@ -26,7 +26,7 @@ class HttpHandler(http.Handler):
             span.name('test:sleep')
             with span.new_child() as span2:
                 span2.name('test2:sleep')
-                await asyncio.sleep(.1, loop=self.app.loop)
+                await asyncio.sleep(.15, loop=self.app.loop)
 
         await self.app.db.query_one(ctx,
                                     'postgres:test', 'SELECT $1::int as a',
@@ -93,7 +93,7 @@ if __name__ == '__main__':
     app.add(
         'db',
         db.Postgres(
-            url='postgres://postgres@localhost:19801/postgres',
+            url='postgres://postgres@127.0.0.1:19801/postgres',
             pool_min_size=2,
             pool_max_size=19,
             pool_max_queries=50000,
@@ -107,7 +107,7 @@ if __name__ == '__main__':
     app.add(
         'redis',
         db.Redis(
-            url='redis://localhost:19802/0?encoding=utf-8',
+            url='redis://127.0.0.1:19802/0?encoding=utf-8',
             pool_min_size=2,
             pool_max_size=4,
             connect_max_attempts=10,
@@ -129,18 +129,18 @@ if __name__ == '__main__':
     app.add(
         'amqp',
         amqp.Amqp(
-            url='amqp://guest:guest@localhost:19803/',
+            url='amqp://guest:guest@127.0.0.1:19803/',
         )
     )
 
     app.setup_logging(
         tracer_driver='zipkin',
-        tracer_addr='http://localhost:9411/',
+        tracer_addr='http://127.0.0.1:19806/',
         tracer_name='test-svc',
         tracer_sample_rate=1.0,
         tracer_send_inteval=3,
         metrics_driver='telegraf-influx',
-        metrics_addr='udp://localhost:8125',
+        metrics_addr='udp://127.0.0.1:19804',
         metrics_name='test_svc_',
         on_span_finish=span_finish
     )

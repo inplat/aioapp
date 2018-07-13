@@ -84,8 +84,8 @@ class Application(object):
     def setup_logging(self, tracer_driver=None, tracer_addr=None,
                       tracer_name=None, tracer_sample_rate=1.0,
                       tracer_send_inteval=3,
-                      tracer_default_sampled: Optional[bool] = None,
-                      tracer_default_debug: Optional[bool] = None,
+                      tracer_default_sampled: bool = True,
+                      tracer_default_debug: bool = False,
                       metrics_driver=None, metrics_addr=None,
                       metrics_name=None,
                       on_span_finish: Optional[Callable] = None):

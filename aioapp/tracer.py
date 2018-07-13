@@ -11,7 +11,6 @@ import aiozipkin.helpers as azh
 import aiozipkin.utils as azu
 from .misc import async_call
 
-
 STATS_CLEAN_NAME_RE = re.compile('[^0-9a-zA-Z_.-]')
 STATS_CLEAN_TAG_RE = re.compile('[^0-9a-zA-Z_=.-]')
 
@@ -47,7 +46,6 @@ SPAN_KIND_AMQP_NACK = 'nack'
 SPAN_KIND_AMQP_IN = 'in'
 SPAN_KIND_TELEGRAM_OUT = 'out'
 SPAN_KIND_TELEGRAM_IN = 'in'
-
 
 ERROR = 'error'
 LOCAL_COMPONENT = 'lc'
@@ -135,7 +133,7 @@ class Span:
             if self.tracer.tracer_driver == DRIVER_ZIPKIN:
                 _span = self.get_zipkin_span()
                 if self._start_stamp is not None:
-                    _span.start(ts=self._start_stamp/1000000)
+                    _span.start(ts=self._start_stamp / 1000000)
                     for _tag_name, _tag_val in self._tags.items():
                         _span.tag(_tag_name, _tag_val)
                     for _ann, _ann_stamp in self._annotations:
@@ -215,7 +213,7 @@ class Span:
     def __str__(self):
         if self._start_stamp is not None and self._finish_stamp is not None:
             duration = (' in %s ms' % (
-                (self._finish_stamp - self._start_stamp) / 1000., ))
+                (self._finish_stamp - self._start_stamp) / 1000.,))
         else:
             duration = ''
         return 'AioappSpan: %s%s' % (self._name, duration)
@@ -241,7 +239,6 @@ class Tracer:
             sampled = self.default_sampled
         if debug is None:
             debug = self.default_debug
-
         span = Span(
             tracer=self,
             metrics=self.metrics,
@@ -294,8 +291,8 @@ class Tracer:
 
     def setup_tracer(self, driver: str, name: str, addr: str,
                      sample_rate: float, send_interval: float,
-                     default_sampled: Optional[bool] = None,
-                     default_debug: Optional[bool] = None) -> None:
+                     default_sampled: bool = True,
+                     default_debug: bool = False) -> None:
         if driver != DRIVER_ZIPKIN:
             raise UserWarning('Unsupported tracer driver')
 
@@ -305,7 +302,8 @@ class Tracer:
 
         endpoint = az.create_endpoint(name)
         sampler = az.Sampler(sample_rate=sample_rate)
-        transport = azt.Transport(addr, send_interval=send_interval,
+        transport = azt.Transport(str(URL(addr).with_path('/api/v2/spans')),
+                                  send_interval=send_interval,
                                   loop=self.loop)
         self.tracer = az.Tracer(transport, sampler, endpoint)
 

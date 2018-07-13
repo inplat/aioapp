@@ -16,8 +16,8 @@ services:
   tracer:
     image: jaegertracing/all-in-one
     ports:
-      - "19806:9411"
-      - "19807:16686"
+      - "127.0.0.1:19806:9411"
+      - "127.0.0.1:19807:16686"
     environment:
       - COLLECTOR_ZIPKIN_HTTP_PORT=9411
     logging:
@@ -37,14 +37,14 @@ services:
     links:
       - influxdb
     ports:
-      - "19804:8094/udp"
+      - "127.0.0.1:19804:8094/udp"
     volumes:
       - ./docker/telegraf.conf:/etc/telegraf/telegraf.conf:ro
   grafana:
     image: grafana/grafana:latest
     container_name: grafana
     ports:
-      - "19805:3000"
+      - "127.0.0.1:19805:3000"
     environment:
       - GF_INSTALL_PLUGINS=grafana-clock-panel,briangann-gauge-panel,natel-plotly-panel,grafana-simple-json-datasource
     links:
