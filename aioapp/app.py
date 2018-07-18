@@ -145,7 +145,6 @@ class Application(object):
                 if asyncio.iscoroutine(res):
                     await res
 
-
     def run_loop(self):
         try:
             self.loop.add_signal_handler(signal.SIGINT, _raise_graceful_exit)
