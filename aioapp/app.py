@@ -3,7 +3,7 @@ import signal
 import logging
 from typing import Dict, Optional, Callable
 from .error import PrepareError, GracefulExit
-from .tracer import Tracer, Span
+from .tracer import Tracer, Span, SERVER
 
 logger = logging.getLogger('aioapp')
 
@@ -36,13 +36,14 @@ class Component(object):
 
 
 class Application(object):
-    def __init__(self, loop=None) -> None:
+    def __init__(self, loop=None, on_start: Optional[Callable] = None) -> None:
         super(Application, self).__init__()
         self.loop = loop or asyncio.get_event_loop()
         self._components: Dict[str, Component] = {}
         self._stop_deps: dict = {}
         self._stopped: list = []
         self.tracer: Tracer = Tracer(self, self.loop)
+        self.on_start: Optional[Callable] = on_start
 
     def add(self, name: str, comp: Component,
             stop_after: list = None):
@@ -135,6 +136,15 @@ class Application(object):
                              loop=self.loop)
 
         self.log_info('Running...')
+
+        if self.on_start is not None:
+            with self.tracer.new_trace() as ctx:
+                ctx.name('start')
+                ctx.kind(SERVER)
+                res = self.on_start(ctx)
+                if asyncio.iscoroutine(res):
+                    await res
+
 
     def run_loop(self):
         try:
