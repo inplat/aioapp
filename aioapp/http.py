@@ -268,7 +268,6 @@ class Client(Component):
                 resp = await session._request(method, url, data=data,
                                               **kwargs)
                 response_body = await resp.read()
-                resp.release()
                 if span:
                     if tracer_config:
                         tracer_config.on_request_end(span, None, resp,
