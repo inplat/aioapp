@@ -13,7 +13,7 @@ async def test_tracer(app: aioapp.app.Application, tracer_server,
         span.tag('key1', '1', metrics=True)
         span.tag('key2', '2')
         span.metrics_tag('key3', '3')
-        with span.new_child('test_child', CLIENT) as span_child:
+        with span.new_child('test_child', CLIENT):
             pass
         with span.new_child('test_skipped', CLIENT) as span_skipped:
             span_skipped.skip()
