@@ -143,7 +143,7 @@ class Application(object):
                 ctx.kind(SERVER)
                 res = self.on_start(ctx)
                 if asyncio.iscoroutine(res):
-                    await res
+                    asyncio.ensure_future(res, loop=self.loop)
 
     def run_loop(self):
         try:

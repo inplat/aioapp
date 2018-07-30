@@ -18,7 +18,7 @@ VENV_BIN=$(VENV_PATH)/bin
 BROWSER := $(VENV_BIN)/python -c "$$BROWSER_PYSCRIPT"
 
 .PHONY: clean
-clean: clean-pyc clean-test clean-venv clean-install clean-mypy fast-test-stop ## remove all build, test, coverage and Python artifacts
+clean: clean-pyc clean-test clean-venv clean-install clean-mypy ## remove all build, test, coverage and Python artifacts
 
 .PHONY: clean-pyc
 clean-pyc: ## remove Python file artifacts
@@ -73,43 +73,11 @@ lint: flake8 bandit mypy ## lint
 
 .PHONY: test
 test: venv ## run tests
-	$(VENV_BIN)/pytest tests
+	$(VENV_BIN)/pytest -v tests
 
 .PHONY: test-all
 test-all: venv ## run tests on every Python version with tox
 	$(VENV_BIN)/tox
-
-
-
-.PHONY: fast-test-prepare
-fast-test-prepare: ## fast-test-prepare
-	docker-compose -f tests/docker-compose.yml up -d
-
-.PHONY: fast-test
-fast-test: venv ## fast-test
-	pytest -s -v --rabbitmq-addr=amqp://guest:guest@127.0.0.1:19803/ --postgres-addr=postgres://postgres@127.0.0.1:19801/postgres --redis-addr=redis://127.0.0.1:19802/1?encoding=utf-8 --tracer-addr=127.0.0.1:19806 --metrics-addr=udp://127.0.0.1:19804 tests
-
-.PHONY: fast-coverage
-fast-coverage: venv ## make coverage report and open it in browser
-		$(VENV_BIN)/coverage run --source aioapp -m pytest tests -v --rabbitmq-addr=amqp://guest:guest@127.0.0.1:19803/ --postgres-addr=postgres://postgres@127.0.0.1:19801/postgres --redis-addr=redis://127.0.0.1:19802/1?encoding=utf-8 --tracer-addr=127.0.0.1:19806 --metrics-addr=udp://127.0.0.1:19804 tests
-		$(VENV_BIN)/coverage report -m
-		$(VENV_BIN)/coverage html
-		$(BROWSER) htmlcov/index.html
-
-.PHONY: fast-test-stop
-fast-test-stop: ## fast-test-stop
-	docker-compose -f tests/docker-compose.yml kill
-	docker-compose -f tests/docker-compose.yml rm -f
-
-.PHONY: fast-test-update
-fast-test-update: ## fast-test-update
-	docker-compose -f tests/docker-compose.yml pull
-	docker-compose -f tests/docker-compose.yml kill
-	docker-compose -f tests/docker-compose.yml rm -f
-
-.PHONY: fast-test-rebuild
-fast-test-rebuild: fast-test-update fast-test-prepare ## fast-test-rebuild
-
 
 .PHONY: coverage-quiet
 coverage-quiet: venv ## make coverage report
@@ -151,7 +119,6 @@ dist: clean venv ## builds source and wheel package
 .PHONY: install
 install: clean venv ## install the package to the active Python's site-packages
 	$(VENV_BIN)/python setup.py install
-
 
 .PHONY: help
 help:  ## Show this help message and exit
