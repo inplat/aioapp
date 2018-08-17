@@ -4,7 +4,7 @@ requests==2.19.1
 
 flake8==3.5.0
 mypy==0.620
-bandit==1.4.0
+bandit==1.5.0
 aiohttp==3.3.2
 pytest-aiohttp==0.3.0
 pytest==3.6.4
