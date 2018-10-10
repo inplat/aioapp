@@ -21,4 +21,4 @@ wheel==0.31.1
 tox==3.2.1
 
 async-generator==1.10
-async_timeout==3.0.0
+async_timeout==3.0.1
