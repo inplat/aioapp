@@ -2,7 +2,7 @@
 
 requests==2.19.1
 
-flake8==3.5.0
+flake8==3.6.0
 mypy==0.630
 bandit==1.5.1
 aiohttp==3.4.4
