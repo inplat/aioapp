@@ -129,7 +129,7 @@ class Span:
             self.tag('error', 'true', True)
             self.tag('error.message', str(exception))
 
-        if self.tracer is not None:
+        if self.tracer is not None and not self._skip:
             if self.tracer.tracer_driver == DRIVER_ZIPKIN:
                 _span = self.get_zipkin_span()
                 if self._start_stamp is not None:
