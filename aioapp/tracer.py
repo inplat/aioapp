@@ -1,4 +1,4 @@
-from typing import Optional, Any, Callable
+from typing import Optional, Any, Callable, List
 from yarl import URL
 import time
 import re
@@ -64,7 +64,8 @@ class Span:
                  sampled: Optional[bool] = None,
                  debug: Optional[bool] = False,
                  shared: bool = False,
-                 skip: bool = False) -> None:
+                 skip: bool = False,
+                 parent: Optional['Span'] = None) -> None:
         self.tracer = tracer
         self.metrics = metrics
         self.trace_id = trace_id
@@ -73,6 +74,7 @@ class Span:
         self.sampled = sampled
         self.debug = debug
         self.shared = shared
+        self.parent = parent
         self._name: Optional[str] = None
         self._kind: Optional[str] = None
         self._tags: dict = {}
@@ -83,9 +85,14 @@ class Span:
         self._finish_stamp: Optional[int] = None
         self._span: Any = None
         self._skip = skip
+        self._exception: Optional[Exception] = None
+        self._children: List['Span'] = []
+        self._sent = False
 
     def skip(self):
         self._skip = True
+        for child in self._children:
+            child.skip()
 
     def make_headers(self):
         headers = {
@@ -108,12 +115,14 @@ class Span:
             parent_id=self.id,
             sampled=self.sampled,
             debug=self.debug,
-            skip=self._skip
+            skip=self._skip,
+            parent=self
         )
         if name is not None:
             span.name(name)
         if kind:
             span.kind(kind)
+        self._children.append(span)
         return span
 
     def start(self, ts: Optional[float] = None):
@@ -125,29 +134,13 @@ class Span:
                exception: Optional[Exception] = None) -> 'Span':
         now = time.time()
         self._finish_stamp = int((ts or now) * 1000000)
+        self._exception = exception
         if exception is not None:
             self.tag('error', 'true', True)
             self.tag('error.message', str(exception))
 
-        if self.tracer is not None and not self._skip:
-            if self.tracer.tracer_driver == DRIVER_ZIPKIN:
-                _span = self.get_zipkin_span()
-                if self._start_stamp is not None:
-                    _span.start(ts=self._start_stamp / 1000000)
-                    for _tag_name, _tag_val in self._tags.items():
-                        _span.tag(_tag_name, _tag_val)
-                    for _ann, _ann_stamp in self._annotations:
-                        _span.annotate(_ann, _ann_stamp / 1000000)
-                    if self._kind:
-                        _span.kind(self._kind)
-                    if self._name:
-                        _span.name(self._name)
-                    if self._remote_endpoint:
-                        _span.remote_endpoint(self._remote_endpoint[0],
-                                              ipv4=self._remote_endpoint[1],
-                                              ipv6=self._remote_endpoint[2],
-                                              port=self._remote_endpoint[3])
-                    _span.finish(ts=now, exception=exception)
+        if self.parent is None:
+            self._send_span()
 
         if self.metrics and not self._skip:
             self.metrics.send(self)
@@ -158,6 +151,35 @@ class Span:
                 asyncio.ensure_future(call, loop=self.tracer.loop)
 
         return self
+
+    def _send_span(self):
+        if not self._sent:
+            self._sent = True
+
+            if self.tracer is not None and not self._skip:
+                if self.tracer.tracer_driver == DRIVER_ZIPKIN:
+                    _span = self.get_zipkin_span()
+                    if self._start_stamp is not None:
+                        _span.start(ts=self._start_stamp / 1000000)
+                        for _tag_name, _tag_val in self._tags.items():
+                            _span.tag(_tag_name, _tag_val)
+                        for _ann, _ann_stamp in self._annotations:
+                            _span.annotate(_ann, _ann_stamp / 1000000)
+                        if self._kind:
+                            _span.kind(self._kind)
+                        if self._name:
+                            _span.name(self._name)
+                        if self._remote_endpoint:
+                            _span.remote_endpoint(
+                                self._remote_endpoint[0],
+                                ipv4=self._remote_endpoint[1],
+                                ipv6=self._remote_endpoint[2],
+                                port=self._remote_endpoint[3])
+                        _span.finish(ts=self._finish_stamp / 1000000,
+                                     exception=self._exception)
+
+        for child in self._children:
+            child._send_span()
 
     def tag(self, key: str, value: str, metrics: bool = False) -> 'Span':
         self._tags[key] = str(value)
@@ -246,7 +268,8 @@ class Tracer:
             id=azu.generate_random_64bit_string(),
             sampled=sampled,
             debug=debug,
-            skip=skip)
+            skip=skip,
+            parent=None)
         return span
 
     def new_trace_from_headers(self, headers: dict, skip: bool = False):
@@ -284,7 +307,8 @@ class Tracer:
             sampled=sampled,
             shared=False,
             debug=debug,
-            skip=skip
+            skip=skip,
+            parent=None
         )
 
         return span
