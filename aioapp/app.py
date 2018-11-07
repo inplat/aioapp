@@ -185,7 +185,7 @@ class Application(object):
         result: Dict[str, Optional[BaseException]] = {}
         for name, cmp in self._components.items():
             try:
-                await cmp.health(span)
+                await cmp.health(ctx)
                 result[name] = None
             except BaseException as err:
                 result[name] = err
