@@ -172,14 +172,21 @@ class Application(object):
         await self._components[name].stop()
         self._stopped.append(name)
 
-    async def health(self) -> Dict[str, Optional[BaseException]]:
-        with self.tracer.new_trace() as span:
-            span.name('healthcheck')
-            result: Dict[str, Optional[BaseException]] = {}
-            for name, cmp in self._components.items():
-                try:
-                    await cmp.health(span)
-                    result[name] = None
-                except BaseException as err:
-                    result[name] = err
-            return result
+    async def health(self, ctx: Optional[Span] = None
+                     ) -> Dict[str, Optional[BaseException]]:
+        if ctx is None:
+            with self.tracer.new_trace() as span:
+                span.name('healthcheck')
+                return await self._health(span)
+        else:
+            return await self._health(ctx)
+
+    async def _health(self, ctx: Span) -> Dict[str, Optional[BaseException]]:
+        result: Dict[str, Optional[BaseException]] = {}
+        for name, cmp in self._components.items():
+            try:
+                await cmp.health(span)
+                result[name] = None
+            except BaseException as err:
+                result[name] = err
+        return result
