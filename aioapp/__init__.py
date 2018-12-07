@@ -3,7 +3,7 @@
 """Top-level package for aioapp."""
 
 __author__ = """Konstantin Stepanov"""
-__version__ = '0.0.2b6'
+__version__ = '0.0.2b7'
 
 from . import app, error
 from .app import Component, Application
