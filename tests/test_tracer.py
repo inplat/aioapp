@@ -87,6 +87,6 @@ async def test_tracer_from_hdrs(request, app: aioapp.app.Application,
     if app.tracer.tracer is not None:
         assert len(req) == 1
         assert req[0][0]['traceId'] == '5813232b6c610041db4a6ef9d4dcf19b'
-        assert req[0][0]['id'] == '5c639fc540090ee6'
+        assert req[0][0]['parentId'] == '5c639fc540090ee6'
     else:
         assert len(req) == 0

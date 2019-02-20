@@ -294,16 +294,12 @@ class Tracer:
         if not trace_id:
             trace_id = azu.generate_random_128bit_string()
 
-        span_id = headers.get(azh.SPAN_ID_HEADER.lower())
-        if not span_id:
-            span_id = azu.generate_random_64bit_string()
-
         span = Span(
             tracer=self,
             metrics=self.metrics,
             trace_id=trace_id,
-            id=span_id,
-            parent_id=headers.get(azh.PARENT_ID_HEADER.lower(), None),
+            id=azu.generate_random_64bit_string(),
+            parent_id=headers.get(azh.SPAN_ID_HEADER.lower()),
             sampled=sampled,
             shared=False,
             debug=debug,
