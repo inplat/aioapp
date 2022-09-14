@@ -1,6 +1,6 @@
 -r requirements.txt
 
-idna==2.7
+idna==3.4
 
 flake8==3.6.0
 mypy==0.641
