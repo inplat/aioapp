@@ -328,10 +328,10 @@ class Tracer:
         self.tracer = az.Tracer(transport, sampler, endpoint)
 
     def setup_metrics(self, driver: str, addr: str, name: str) -> None:
-        if driver != 'telegraf-influx':
+        if driver not in ('telegraf-influx', 'statsd-influx'):
             raise UserWarning('Unsupported metrics driver')
         url = URL(addr)
-        self.metrics = InfluxMetrics(self, url, name, self.loop)
+        self.metrics = InfluxMetrics(self, url, name, driver, self.loop)
 
     async def close(self):
         if self.tracer:
@@ -343,10 +343,11 @@ class Tracer:
 class InfluxMetrics:
 
     def __init__(self, tracer: Tracer, url: URL, name: Optional[str],
-                 loop: asyncio.AbstractEventLoop) -> None:
+                 format: str, loop: asyncio.AbstractEventLoop) -> None:
         self.tracer = tracer
         self.name = name
         self.url = url
+        self.format = format
         self.loop = loop
         self.transport = None
         self.closing = False
@@ -388,9 +389,15 @@ class InfluxMetrics:
 
             if tags:
                 name = name + ',' + (','.join(tags))
-            line = '%s duration=%s %s\n' % (name,
-                                            duration,
-                                            span._finish_stamp * 1000)
+            
+            if self.format == 'telegraf-influx':
+                line = '%s duration=%s %s\n' % (name,
+                                                duration,
+                                                span._finish_stamp * 1000)
+            else:
+                line = '%s:%s|ms\n' % (name,
+                                       duration)
+                                       
             self.transport.sendto(line.encode())
 
     def connection_made(self, transport):
